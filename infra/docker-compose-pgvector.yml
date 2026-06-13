@@ -1,0 +1,14 @@
+# docker compose -f docker-compose-pgvector.yml up -d
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: ancf
+      POSTGRES_USER: ancf
+      POSTGRES_PASSWORD: ancf_dev
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+      - ../services/migrations:/docker-entrypoint-initdb.d
+volumes:
+  pgvector_data:

@@ -1,0 +1,1040 @@
+openapi: "3.0.3"
+info:
+  title: ANCF Commerce API v1
+  description: |
+    Agent-Native Commerce Framework (ANCF) v1 API.
+
+    ANCF is a Zero-Frontend Commerce protocol where Agents discover shops,
+    search products, obtain backend-authoritative quotes, and submit signed
+    checkout intents. The backend is authoritative for all trusted state:
+    pricing, inventory, ledger, minting, and provisioning.
+
+    ## Agent Requirements
+
+    Agents must:
+    - Fetch and validate `/.well-known/agent-rules.json` before any commerce action.
+    - Verify manifest signature, schema, and firmware SRI.
+    - Call `/quote` after `/search`; never use search prices for checkout.
+    - Send `Idempotency-Key` for all mutating APIs.
+    - Require human confirmation before real asset movement.
+    - Never call mint/redemption APIs unless the user explicitly chooses them.
+
+    ## Security
+
+    - All mutating APIs require an `Idempotency-Key` header.
+    - `checkout/commit` requires a valid wallet signature over the canonical signable payload.
+    - `X-API-Key` header is required for API authentication.
+    - The backend verifies: quote freshness, idempotency, wallet signature,
+      inventory availability, vUSDC balance, and Agent session policy.
+  version: "1.0.0"
+  contact:
+    name: ANCF Team
+    url: https://github.com/ancf-commerce/ancf
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.yourshop.com
+    description: Production server (example)
+
+tags:
+  - name: Discovery
+    description: Manifest and protocol discovery
+  - name: Catalog
+    description: Product search and listing
+  - name: Quote
+    description: Backend-authoritative price quotes
+  - name: Checkout
+    description: Order intent creation and commit
+  - name: Wallet
+    description: vUSDC deposit and redemption
+  - name: System
+    description: Health and diagnostics
+
+paths:
+  /.well-known/agent-rules.json:
+    get:
+      tags: [Discovery]
+      summary: Retrieve the ANCF discovery manifest
+      description: |
+        Returns the signed agent-rules.json manifest.
+        Agents must validate the manifest signature before using any commerce API.
+      operationId: getManifest
+      responses:
+        "200":
+          description: Signed manifest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manifest'
+              example:
+                protocol_version: "ANCF-1.0"
+                shop_id: "zero_shop_sol_01"
+                issued_at: "2026-06-04T00:00:00Z"
+                expires_at: "2026-06-11T00:00:00Z"
+                supported_networks: ["solana-mainnet", "sonic-l2"]
+                supported_assets:
+                  - symbol: "vUSDC"
+                    decimals: 6
+                    type: "shadow-ledger"
+                    redeemable: true
+                schemas:
+                  manifest: "https://cdn.yourshop.com/ancf/v1/manifest.schema.json"
+                  checkout: "https://cdn.yourshop.com/ancf/v1/checkout.schema.json"
+                  mint: "https://cdn.yourshop.com/ancf/v1/mint.schema.json"
+                capabilities:
+                  search:
+                    endpoint: "/api/v1/cli/search"
+                    method: "GET"
+                  quote:
+                    endpoint: "/api/v1/cli/quote"
+                    method: "POST"
+                  checkout_prepare:
+                    endpoint: "/api/v1/cli/checkout/prepare"
+                    method: "POST"
+                  checkout_commit:
+                    endpoint: "/api/v1/cli/checkout/commit"
+                    method: "POST"
+                    requires_idempotency_key: true
+                    requires_wallet_signature: true
+                  deposit_intent:
+                    endpoint: "/api/v1/wallet/deposit-intents"
+                    method: "POST"
+                  redeem:
+                    endpoint: "/api/v1/wallet/redeem"
+                    method: "POST"
+                ui_firmware:
+                  components:
+                    - url: "https://cdn.yourshop.com/firmware/v1/components.abc123.js"
+                      integrity: "sha384-..."
+                      type: "module"
+                  theme_tokens:
+                    primary: "#00FFA3"
+                    background: "#0D0E12"
+                    text: "#FFFFFF"
+                agent_policy:
+                  allow_autonomous_checkout: false
+                  max_auto_total_minor: "0"
+                  require_human_confirmation: true
+                  allowed_component_hosts: ["cdn.yourshop.com"]
+                signature:
+                  alg: "EdDSA"
+                  kid: "firmware-key-2026-06"
+                  jws: "..."
+
+  /api/v1/cli/search:
+    get:
+      tags: [Catalog]
+      summary: Search products
+      description: |
+        Search for products by keyword. Results are display-only and must not be
+        used directly for checkout pricing. Agents must call /api/v1/cli/quote
+        to obtain an authoritative price before checkout.
+      operationId: searchProducts
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query string
+          schema:
+            type: string
+            minLength: 1
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          description: Pagination offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              example:
+                items:
+                  - sku_id: "sku_h100_v1"
+                    title: "H100 compute rental, hourly"
+                    price:
+                      currency: "vUSDC"
+                      amount_minor: "2450000"
+                      scale: 6
+                    stock_hint: 42
+                    specs:
+                      GPU: "80GB SXM5"
+                      CUDA: "12.4"
+                    media:
+                      thumbnail: "https://cdn.yourshop.com/h100.png"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/cli/quote:
+    post:
+      tags: [Quote]
+      summary: Get an authoritative price quote
+      description: |
+        Submit line items and receive a backend-authoritative quote with
+        a short expiration window (default 5 minutes). Quotes are single-use;
+        once consumed by a successful checkout commit, they cannot be reused.
+      operationId: createQuote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+            example:
+              wallet: "USER_WALLET"
+              network: "solana-mainnet"
+              lines:
+                - sku_id: "sku_h100_v1"
+                  quantity: 2
+      responses:
+        "200":
+          description: Authoritative quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+              example:
+                quote_id: "quote_01J..."
+                currency: "vUSDC"
+                total_minor: "4900000"
+                scale: 6
+                expires_at: "2026-06-04T00:10:00Z"
+                lines:
+                  - sku_id: "sku_h100_v1"
+                    quantity: 2
+                    unit_price_minor: "2450000"
+                    line_total_minor: "4900000"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/cli/checkout/prepare:
+    post:
+      tags: [Checkout]
+      summary: Prepare a checkout intent for wallet signing
+      description: |
+        Generate a canonical order intent payload that the user must sign
+        with their wallet. The returned `signable_payload` must be signed
+        exactly as-is (canonical JSON). The signature is then submitted
+        with `/api/v1/cli/checkout/commit`.
+      operationId: checkoutPrepare
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutPrepareRequest'
+            example:
+              quote_id: "quote_01J..."
+              wallet: "USER_WALLET"
+              network: "solana-mainnet"
+              agent_session_id: "agent_session_01J..."
+      responses:
+        "200":
+          description: Signable order intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutPrepareResponse'
+              example:
+                order_intent_id: "intent_01J..."
+                quote_id: "quote_01J..."
+                signable_payload:
+                  domain: "yourshop.com"
+                  shop_id: "zero_shop_sol_01"
+                  network: "solana-mainnet"
+                  wallet: "USER_WALLET"
+                  quote_id: "quote_01J..."
+                  total_minor: "4900000"
+                  currency: "vUSDC"
+                  expires_at: "2026-06-04T00:10:00Z"
+                  nonce: "random_128bit_nonce"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: Quote not found or already consumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/cli/checkout/commit:
+    post:
+      tags: [Checkout]
+      summary: Commit a signed checkout intent
+      description: |
+        Submit the wallet-signed order intent to finalize the checkout.
+        The backend verifies:
+        - Idempotency-Key is unique and matches the request body.
+        - The quote exists, is unexpired, and unconsumed.
+        - The order intent matches the signed payload hash.
+        - The wallet signature is valid.
+        - The wallet matches the quote-bound wallet.
+        - Inventory can be reserved.
+        - vUSDC balance is sufficient.
+        - Agent session is valid and policy-compliant.
+
+        **Requires:** `Idempotency-Key` header and `X-API-Key` header.
+      operationId: checkoutCommit
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Unique idempotency key for exactly-once semantics
+          schema:
+            type: string
+            pattern: '^ck_'
+            example: "ck_01J..."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutCommitRequest'
+            example:
+              order_intent_id: "intent_01J..."
+              quote_id: "quote_01J..."
+              wallet: "USER_WALLET"
+              wallet_signature: "base64_or_chain_specific_signature"
+              agent_session_id: "agent_session_01J..."
+      responses:
+        "200":
+          description: Checkout committed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutCommitResponse'
+              example:
+                order_id: "order_01J..."
+                status: "created"
+                order_intent_id: "intent_01J..."
+                created_at: "2026-06-04T00:05:00Z"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "409":
+          description: Conflict (idempotency key reused with different body, quote expired, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/wallet/deposit-intents:
+    post:
+      tags: [Wallet]
+      summary: Create a deposit intent for vUSDC minting
+      description: |
+        Request a reserve address to deposit USDC (or another accepted asset).
+        The returned `deposit_intent_id` and `reserve_address` should be used
+        to complete the on-chain transfer. Once the chain adapter confirms the
+        deposit, the mint-service credits the user's vUSDC balance.
+
+        Agents must never call this API unless the user explicitly chooses deposit.
+      operationId: createDepositIntent
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Unique idempotency key
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositIntentRequest'
+            example:
+              wallet: "USER_WALLET"
+              network: "solana-mainnet"
+              asset_symbol: "USDC"
+              amount_minor: "100000000"  # 100 USDC at 6 decimals
+      responses:
+        "200":
+          description: Deposit intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositIntentResponse'
+              example:
+                deposit_intent_id: "deposit_01J..."
+                reserve_address: "RESERVE_ADDRESS_BASE58"
+                memo: "deposit_01J..."
+                expected_asset: "USDC"
+                expected_amount_minor: "100000000"
+                expires_at: "2026-06-04T01:00:00Z"
+                network: "solana-mainnet"
+                status: "pending"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/wallet/redeem:
+    post:
+      tags: [Wallet]
+      summary: Redeem vUSDC for the underlying reserve asset
+      description: |
+        Request to redeem vUSDC. The backend locks the user's vUSDC balance,
+        then processes the burn (shadow-ledger debit or on-chain burn) and
+        initiates a payout of the underlying reserve asset (e.g. USDC).
+
+        Agents must never call this API unless the user explicitly chooses redemption.
+      operationId: redeemVusdc
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Unique idempotency key
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedemptionRequest'
+            example:
+              wallet: "USER_WALLET"
+              network: "solana-mainnet"
+              asset_symbol: "vUSDC"
+              amount_minor: "50000000"  # 50 vUSDC at 6 decimals
+              destination_address: "DESTINATION_USDC_ADDRESS"
+              destination_asset: "USDC"
+      responses:
+        "200":
+          description: Redemption request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedemptionResponse'
+              example:
+                redemption_id: "redemption_01J..."
+                status: "created"
+                asset_symbol: "vUSDC"
+                amount_minor: "50000000"
+                created_at: "2026-06-04T00:30:00Z"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: Returns service health status. No authentication required.
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: ["status", "version"]
+                properties:
+                  status:
+                    type: string
+                    enum: ["ok", "degraded", "down"]
+                  version:
+                    type: string
+                  uptime_seconds:
+                    type: number
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                      redis:
+                        type: string
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authenticating requests. Required for all endpoints except /health.
+
+  schemas:
+    Manifest:
+      type: object
+      required:
+        - protocol_version
+        - shop_id
+        - issued_at
+        - expires_at
+        - schemas
+        - capabilities
+        - agent_policy
+        - signature
+      properties:
+        protocol_version:
+          type: string
+          pattern: '^ANCF-\d+\.\d+$'
+        shop_id:
+          type: string
+          minLength: 1
+        issued_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        supported_networks:
+          type: array
+          items:
+            type: string
+            enum: [solana-mainnet, sonic-l2, solana-devnet]
+        supported_assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportedAsset'
+        schemas:
+          type: object
+          required: [manifest, checkout, mint]
+          properties:
+            manifest:
+              type: string
+              format: uri
+            checkout:
+              type: string
+              format: uri
+            mint:
+              type: string
+              format: uri
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+        ui_firmware:
+          $ref: '#/components/schemas/UiFirmware'
+        agent_policy:
+          $ref: '#/components/schemas/AgentPolicy'
+        payment_rails:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentRail'
+        signature:
+          $ref: '#/components/schemas/Signature'
+
+    SupportedAsset:
+      type: object
+      required: [symbol, decimals, type]
+      properties:
+        symbol:
+          type: string
+        decimals:
+          type: integer
+          minimum: 0
+        type:
+          type: string
+          enum: [shadow-ledger, spl-token, token-2022, native-sol]
+        redeemable:
+          type: boolean
+
+    Capabilities:
+      type: object
+      required: [search, quote, checkout_prepare, checkout_commit, deposit_intent, redeem]
+      properties:
+        search:
+          $ref: '#/components/schemas/CapabilityEndpoint'
+        quote:
+          $ref: '#/components/schemas/CapabilityEndpoint'
+        checkout_prepare:
+          $ref: '#/components/schemas/CapabilityEndpoint'
+        checkout_commit:
+          allOf:
+            - $ref: '#/components/schemas/CapabilityEndpoint'
+            - type: object
+              properties:
+                requires_idempotency_key:
+                  type: boolean
+                requires_wallet_signature:
+                  type: boolean
+        deposit_intent:
+          $ref: '#/components/schemas/CapabilityEndpoint'
+        redeem:
+          $ref: '#/components/schemas/CapabilityEndpoint'
+
+    CapabilityEndpoint:
+      type: object
+      required: [endpoint, method]
+      properties:
+        endpoint:
+          type: string
+        method:
+          type: string
+          enum: [GET, POST]
+
+    UiFirmware:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            type: object
+            required: [url, integrity, type]
+            properties:
+              url:
+                type: string
+                format: uri
+              integrity:
+                type: string
+                pattern: '^sha(256|384|512)-'
+              type:
+                type: string
+                enum: [module, script]
+        theme_tokens:
+          type: object
+          additionalProperties:
+            type: string
+
+    AgentPolicy:
+      type: object
+      required: [allow_autonomous_checkout, max_auto_total_minor, require_human_confirmation, allowed_component_hosts]
+      properties:
+        allow_autonomous_checkout:
+          type: boolean
+        max_auto_total_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        require_human_confirmation:
+          type: boolean
+        allowed_component_hosts:
+          type: array
+          items:
+            type: string
+
+    PaymentRail:
+      type: object
+      required: [rail, currency]
+      properties:
+        rail:
+          type: string
+        currency:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [direct_checkout, deposit_topup, usage_charge]
+        requires_user_authorization:
+          type: boolean
+        payment_skill:
+          type: string
+        preserve_payment_url_exactly:
+          type: boolean
+
+    Signature:
+      type: object
+      required: [alg, kid, jws]
+      properties:
+        alg:
+          type: string
+          enum: [EdDSA, ES256, ES384, ES512, RS256]
+        kid:
+          type: string
+        jws:
+          type: string
+
+    SearchResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchItem'
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+
+    SearchItem:
+      type: object
+      required: [sku_id, title, price]
+      properties:
+        sku_id:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        price:
+          $ref: '#/components/schemas/DisplayPrice'
+        stock_hint:
+          type: integer
+          minimum: 0
+        specs:
+          type: object
+          additionalProperties:
+            type: string
+        media:
+          $ref: '#/components/schemas/SearchMedia'
+
+    DisplayPrice:
+      type: object
+      required: [currency, amount_minor, scale]
+      properties:
+        currency:
+          type: string
+          enum: [vUSDC]
+        amount_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        scale:
+          type: integer
+          minimum: 0
+
+    SearchMedia:
+      type: object
+      properties:
+        thumbnail:
+          type: string
+          format: uri
+        gallery:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    QuoteRequest:
+      type: object
+      required: [wallet, network, lines]
+      properties:
+        wallet:
+          type: string
+          minLength: 1
+        network:
+          type: string
+          enum: [solana-mainnet, sonic-l2, solana-devnet]
+        payment_rail:
+          type: string
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/QuoteLineItem'
+
+    QuoteLineItem:
+      type: object
+      required: [sku_id, quantity]
+      properties:
+        sku_id:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          exclusiveMinimum: 0
+
+    QuoteResponse:
+      type: object
+      required: [quote_id, currency, total_minor, scale, expires_at, lines]
+      properties:
+        quote_id:
+          type: string
+          pattern: '^quote_'
+        currency:
+          type: string
+          enum: [vUSDC, CNY]
+        total_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        scale:
+          type: integer
+          minimum: 0
+        expires_at:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/QuoteResponseLine'
+
+    QuoteResponseLine:
+      type: object
+      required: [sku_id, quantity, unit_price_minor, line_total_minor]
+      properties:
+        sku_id:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          exclusiveMinimum: 0
+        unit_price_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        line_total_minor:
+          type: string
+          pattern: '^[0-9]+$'
+
+    CheckoutPrepareRequest:
+      type: object
+      required: [quote_id, wallet, network]
+      properties:
+        quote_id:
+          type: string
+          pattern: '^quote_'
+        wallet:
+          type: string
+          minLength: 1
+        network:
+          type: string
+          enum: [solana-mainnet, sonic-l2, solana-devnet]
+        agent_session_id:
+          type: string
+
+    CheckoutPrepareResponse:
+      type: object
+      required: [order_intent_id, quote_id, signable_payload]
+      properties:
+        order_intent_id:
+          type: string
+          pattern: '^intent_'
+        quote_id:
+          type: string
+          pattern: '^quote_'
+        signable_payload:
+          $ref: '#/components/schemas/SignablePayload'
+
+    SignablePayload:
+      type: object
+      required: [domain, shop_id, network, wallet, quote_id, total_minor, currency, expires_at, nonce]
+      properties:
+        domain:
+          type: string
+          minLength: 1
+        shop_id:
+          type: string
+          minLength: 1
+        network:
+          type: string
+          enum: [solana-mainnet, sonic-l2, solana-devnet]
+        wallet:
+          type: string
+          minLength: 1
+        quote_id:
+          type: string
+          pattern: '^quote_'
+        total_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        currency:
+          type: string
+          enum: [vUSDC, CNY]
+        expires_at:
+          type: string
+          format: date-time
+        nonce:
+          type: string
+          minLength: 16
+
+    CheckoutCommitRequest:
+      type: object
+      required: [order_intent_id, quote_id, wallet, wallet_signature, agent_session_id]
+      properties:
+        order_intent_id:
+          type: string
+          pattern: '^intent_'
+        quote_id:
+          type: string
+          pattern: '^quote_'
+        wallet:
+          type: string
+          minLength: 1
+        wallet_signature:
+          type: string
+          minLength: 1
+        agent_session_id:
+          type: string
+          minLength: 1
+
+    CheckoutCommitResponse:
+      type: object
+      required: [order_id, status]
+      properties:
+        order_id:
+          type: string
+          pattern: '^order_'
+        status:
+          type: string
+          enum: [created, pending, payment_pending, processing, completed, failed]
+        order_intent_id:
+          type: string
+          pattern: '^intent_'
+        created_at:
+          type: string
+          format: date-time
+
+    DepositIntentRequest:
+      type: object
+      required: [wallet, network, asset_symbol, amount_minor]
+      properties:
+        wallet:
+          type: string
+          minLength: 1
+        network:
+          type: string
+          enum: [solana-mainnet, sonic-l2, solana-devnet]
+        asset_symbol:
+          type: string
+          minLength: 1
+        amount_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        payment_rail:
+          type: string
+
+    DepositIntentResponse:
+      type: object
+      required: [deposit_intent_id, reserve_address]
+      properties:
+        deposit_intent_id:
+          type: string
+          pattern: '^deposit_'
+        reserve_address:
+          type: string
+          minLength: 1
+        memo:
+          type: string
+        expected_asset:
+          type: string
+        expected_amount_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        expires_at:
+          type: string
+          format: date-time
+        network:
+          type: string
+          enum: [solana-mainnet, sonic-l2, solana-devnet]
+        status:
+          type: string
+          enum: [pending, confirmed, credited, failed, expired]
+
+    RedemptionRequest:
+      type: object
+      required: [wallet, network, asset_symbol, amount_minor]
+      properties:
+        wallet:
+          type: string
+          minLength: 1
+        network:
+          type: string
+          enum: [solana-mainnet, sonic-l2, solana-devnet]
+        asset_symbol:
+          type: string
+          minLength: 1
+        amount_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        destination_address:
+          type: string
+        destination_asset:
+          type: string
+
+    RedemptionResponse:
+      type: object
+      required: [redemption_id, status]
+      properties:
+        redemption_id:
+          type: string
+          pattern: '^redemption_'
+        status:
+          type: string
+          enum: [created, balance_locked, burn_submitted, burned, payout_submitted, paid, failed, released]
+        asset_symbol:
+          type: string
+        amount_minor:
+          type: string
+          pattern: '^[0-9]+$'
+        destination_address:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        failure_reason:
+          type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  reason:
+                    type: string
+            request_id:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "INVALID_PARAMETER"
+              message: "Validation failed for field 'wallet'"
+              request_id: "req_01J..."
+
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "UNAUTHORIZED"
+              message: "Missing or invalid X-API-Key header"
+              request_id: "req_01J..."
+
+security:
+  - ApiKeyAuth: []

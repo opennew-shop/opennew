@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdn.yourshop.com/ancf/v1/search-response.schema.json",
+  "title": "ANCF Search Response",
+  "description": "Schema for the search API response (display-only; not authoritative for checkout)",
+  "type": "object",
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "description": "Search result items",
+      "items": {
+        "type": "object",
+        "required": ["sku_id", "title", "price"],
+        "properties": {
+          "sku_id": {
+            "type": "string",
+            "description": "Unique SKU identifier",
+            "minLength": 1,
+            "examples": ["sku_h100_v1"]
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title for the product",
+            "minLength": 1,
+            "examples": ["H100 compute rental, hourly"]
+          },
+          "price": {
+            "type": "object",
+            "description": "Display price (not authoritative for checkout; must call quote)",
+            "required": ["currency", "amount_minor", "scale"],
+            "properties": {
+              "currency": {
+                "type": "string",
+                "description": "Currency code",
+                "enum": ["AGP"],
+                "examples": ["AGP"]
+              },
+              "amount_minor": {
+                "type": "string",
+                "description": "Price in minor units (e.g. cents/satoshis) as a string to avoid precision loss",
+                "pattern": "^[0-9]+$",
+                "examples": ["2450000"]
+              },
+              "scale": {
+                "type": "integer",
+                "description": "Number of decimal places for amount_minor",
+                "minimum": 0,
+                "examples": [6]
+              }
+            }
+          },
+          "stock_hint": {
+            "type": "integer",
+            "description": "Approximate available stock count (display-only; backend reserves authoritatively)",
+            "minimum": 0
+          },
+          "specs": {
+            "type": "object",
+            "description": "Product specifications as free-form key-value pairs",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "media": {
+            "type": "object",
+            "description": "Media assets for the product",
+            "properties": {
+              "thumbnail": {
+                "type": "string",
+                "format": "uri",
+                "description": "Thumbnail image URL"
+              },
+              "gallery": {
+                "type": "array",
+                "description": "Additional image URLs",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "total": {
+      "type": "integer",
+      "description": "Total number of matching results (for pagination)",
+      "minimum": 0
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Requested page size",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "offset": {
+      "type": "integer",
+      "description": "Current page offset",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

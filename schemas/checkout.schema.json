@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdn.yourshop.com/ancf/v1/checkout.schema.json",
+  "title": "ANCF Checkout Prepare and Commit",
+  "description": "Schema definitions for checkout prepare and checkout commit requests and responses",
+  "definitions": {
+    "signable_payload": {
+      "type": "object",
+      "description": "Canonical order intent payload that the user wallet must sign",
+      "required": ["domain", "shop_id", "network", "wallet", "quote_id", "total_minor", "currency", "expires_at", "nonce"],
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Shop domain for domain-separated signing",
+          "minLength": 1,
+          "examples": ["yourshop.com"]
+        },
+        "shop_id": {
+          "type": "string",
+          "description": "Shop identifier",
+          "minLength": 1
+        },
+        "network": {
+          "type": "string",
+          "enum": ["solana-mainnet", "sonic-l2", "solana-devnet"]
+        },
+        "wallet": {
+          "type": "string",
+          "description": "User wallet public key or address",
+          "minLength": 1
+        },
+        "quote_id": {
+          "type": "string",
+          "pattern": "^quote_"
+        },
+        "total_minor": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["AGP", "CNY"]
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nonce": {
+          "type": "string",
+          "description": "Single-use random nonce (at least 128 bits of entropy)",
+          "minLength": 16
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkout_prepare_request": {
+      "type": "object",
+      "description": "Request body for POST /api/v1/cli/checkout/prepare",
+      "required": ["quote_id", "wallet", "network"],
+      "properties": {
+        "quote_id": {
+          "type": "string",
+          "description": "Valid, unexpired, unconsumed quote ID",
+          "pattern": "^quote_"
+        },
+        "wallet": {
+          "type": "string",
+          "description": "User wallet public key or address (must match the quote wallet)",
+          "minLength": 1
+        },
+        "network": {
+          "type": "string",
+          "description": "Blockchain network for signature",
+          "enum": ["solana-mainnet", "sonic-l2", "solana-devnet"]
+        },
+        "agent_session_id": {
+          "type": "string",
+          "description": "Agent session identifier for policy enforcement",
+          "examples": ["agent_session_01J..."]
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkout_prepare_response": {
+      "type": "object",
+      "description": "Response body for POST /api/v1/cli/checkout/prepare",
+      "required": ["order_intent_id", "quote_id", "signable_payload"],
+      "properties": {
+        "order_intent_id": {
+          "type": "string",
+          "description": "Unique order intent identifier",
+          "pattern": "^intent_",
+          "examples": ["intent_01J..."]
+        },
+        "quote_id": {
+          "type": "string",
+          "pattern": "^quote_"
+        },
+        "signable_payload": {
+          "$ref": "#/definitions/signable_payload"
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkout_commit_request": {
+      "type": "object",
+      "description": "Request body for POST /api/v1/cli/checkout/commit (requires Idempotency-Key header)",
+      "required": ["order_intent_id", "quote_id", "wallet", "wallet_signature", "agent_session_id"],
+      "properties": {
+        "order_intent_id": {
+          "type": "string",
+          "description": "Order intent ID from the prepare response",
+          "pattern": "^intent_"
+        },
+        "quote_id": {
+          "type": "string",
+          "pattern": "^quote_"
+        },
+        "wallet": {
+          "type": "string",
+          "description": "User wallet public key or address (must match prepare wallet)",
+          "minLength": 1
+        },
+        "wallet_signature": {
+          "type": "string",
+          "description": "Cryptographic signature over the canonical signable_payload (base64 or chain-specific encoding)",
+          "minLength": 1
+        },
+        "agent_session_id": {
+          "type": "string",
+          "description": "Agent session identifier",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkout_commit_response": {
+      "type": "object",
+      "description": "Response body for POST /api/v1/cli/checkout/commit",
+      "required": ["order_id", "status"],
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "description": "Unique order identifier",
+          "pattern": "^order_",
+          "examples": ["order_01J..."]
+        },
+        "status": {
+          "type": "string",
+          "description": "Order status after commit",
+          "enum": ["created", "pending", "payment_pending", "processing", "completed", "failed"]
+        },
+        "order_intent_id": {
+          "type": "string",
+          "pattern": "^intent_"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

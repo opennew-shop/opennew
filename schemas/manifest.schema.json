@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdn.yourshop.com/ancf/v1/manifest.schema.json",
+  "title": "ANCF Discovery Manifest",
+  "description": "Schema for the ANCF agent-rules.json discovery manifest returned at /.well-known/agent-rules.json",
+  "type": "object",
+  "required": [
+    "protocol_version",
+    "shop_id",
+    "issued_at",
+    "expires_at",
+    "schemas",
+    "capabilities",
+    "agent_policy",
+    "signature"
+  ],
+  "properties": {
+    "protocol_version": {
+      "type": "string",
+      "description": "Protocol version identifier",
+      "pattern": "^ANCF-\\d+\\.\\d+$",
+      "examples": ["ANCF-1.0"]
+    },
+    "shop_id": {
+      "type": "string",
+      "description": "Unique shop identifier",
+      "minLength": 1,
+      "examples": ["zero_shop_sol_01"]
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this manifest was issued"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this manifest expires"
+    },
+    "supported_networks": {
+      "type": "array",
+      "description": "Blockchain networks supported by this shop",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["solana-mainnet", "sonic-l2", "solana-devnet"]
+      }
+    },
+    "supported_assets": {
+      "type": "array",
+      "description": "Assets accepted for payment in this shop",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "decimals", "type"],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "Asset ticker symbol",
+            "examples": ["AGP"]
+          },
+          "decimals": {
+            "type": "integer",
+            "description": "Number of decimal places for this asset",
+            "minimum": 0
+          },
+          "type": {
+            "type": "string",
+            "enum": ["shadow-ledger", "spl-token", "token-2022", "native-sol"],
+            "description": "Asset implementation type"
+          },
+          "redeemable": {
+            "type": "boolean",
+            "description": "Whether this asset can be redeemed for the underlying reserve",
+            "default": false
+          }
+        }
+      }
+    },
+    "schemas": {
+      "type": "object",
+      "description": "URLs to JSON Schema definitions for key protocol artefacts",
+      "required": ["manifest", "checkout", "mint"],
+      "properties": {
+        "manifest": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the manifest schema itself"
+        },
+        "checkout": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the checkout schema"
+        },
+        "mint": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the mint schema"
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "Declared API capabilities and their endpoints",
+      "required": ["search", "quote", "checkout_prepare", "checkout_commit", "deposit_intent", "redeem"],
+      "properties": {
+        "search": {
+          "type": "object",
+          "required": ["endpoint", "method"],
+          "properties": {
+            "endpoint": { "type": "string" },
+            "method": { "type": "string", "enum": ["GET"] }
+          }
+        },
+        "quote": {
+          "type": "object",
+          "required": ["endpoint", "method"],
+          "properties": {
+            "endpoint": { "type": "string" },
+            "method": { "type": "string", "enum": ["POST"] }
+          }
+        },
+        "checkout_prepare": {
+          "type": "object",
+          "required": ["endpoint", "method"],
+          "properties": {
+            "endpoint": { "type": "string" },
+            "method": { "type": "string", "enum": ["POST"] }
+          }
+        },
+        "checkout_commit": {
+          "type": "object",
+          "required": ["endpoint", "method"],
+          "properties": {
+            "endpoint": { "type": "string" },
+            "method": { "type": "string", "enum": ["POST"] },
+            "requires_idempotency_key": { "type": "boolean" },
+            "requires_wallet_signature": { "type": "boolean" }
+          }
+        },
+        "deposit_intent": {
+          "type": "object",
+          "required": ["endpoint", "method"],
+          "properties": {
+            "endpoint": { "type": "string" },
+            "method": { "type": "string", "enum": ["POST"] }
+          }
+        },
+        "redeem": {
+          "type": "object",
+          "required": ["endpoint", "method"],
+          "properties": {
+            "endpoint": { "type": "string" },
+            "method": { "type": "string", "enum": ["POST"] }
+          }
+        }
+      }
+    },
+    "ui_firmware": {
+      "type": "object",
+      "description": "Firmware component URLs with Subresource Integrity hashes",
+      "properties": {
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url", "integrity", "type"],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Component file URL (hash-named for cache busting)"
+              },
+              "integrity": {
+                "type": "string",
+                "description": "SRI integrity hash (e.g. sha384-...)",
+                "pattern": "^sha(256|384|512)-"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["module", "script"],
+                "description": "Script type attribute value"
+              }
+            }
+          }
+        },
+        "theme_tokens": {
+          "type": "object",
+          "description": "CSS custom property tokens for theming",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "agent_policy": {
+      "type": "object",
+      "description": "Rules governing Agent autonomy and constraints",
+      "required": ["allow_autonomous_checkout", "max_auto_total_minor", "require_human_confirmation", "allowed_component_hosts"],
+      "properties": {
+        "allow_autonomous_checkout": {
+          "type": "boolean",
+          "description": "Whether the Agent may submit checkout without explicit human confirmation"
+        },
+        "max_auto_total_minor": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Maximum total amount (in minor units) allowed for autonomous checkout; 0 means none"
+        },
+        "require_human_confirmation": {
+          "type": "boolean",
+          "description": "Whether human confirmation is required before real asset movement"
+        },
+        "allowed_component_hosts": {
+          "type": "array",
+          "description": "Whitelisted hostnames from which firmware components may be loaded",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "payment_rails": {
+      "type": "array",
+      "description": "Payment rails supported by this shop (e.g. Alipay A2A, AGP ledger)",
+      "items": {
+        "type": "object",
+        "required": ["rail", "currency"],
+        "properties": {
+          "rail": {
+            "type": "string",
+            "description": "Payment rail identifier",
+            "examples": ["alipay_a2a", "agentpay_ledger"]
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency code for this rail",
+            "examples": ["CNY", "AGP"]
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["direct_checkout", "deposit_topup", "usage_charge"]
+            }
+          },
+          "requires_user_authorization": {
+            "type": "boolean"
+          },
+          "payment_skill": {
+            "type": "string",
+            "description": "Agent skill identifier for payment handling"
+          },
+          "preserve_payment_url_exactly": {
+            "type": "boolean",
+            "description": "Agent must not modify or shorten payment URLs"
+          }
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "description": "Cryptographic signature over the manifest content",
+      "required": ["alg", "kid", "jws"],
+      "properties": {
+        "alg": {
+          "type": "string",
+          "description": "Signature algorithm",
+          "enum": ["EdDSA", "ES256", "ES384", "ES512", "RS256"]
+        },
+        "kid": {
+          "type": "string",
+          "description": "Key identifier for signature verification"
+        },
+        "jws": {
+          "type": "string",
+          "description": "JWS compact serialization of the detached signature"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,30 @@
+# Rust build artifacts
+/target
+
+# Solana wallet keypairs — NEVER commit private keys
+payer.json
+*.json
+
+# Exceptions: keep config and manifest files
+!Cargo.toml
+!.gitignore
+!tsconfig.json
+!package.json
+!package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Deployment artifacts (may contain keys)
+deploy-manifest.json

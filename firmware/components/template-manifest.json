@@ -1,0 +1,42 @@
+{
+  "manifest_version": "1.0",
+  "name": "ANCF Legacy Vue Animated Components",
+  "status": "deprecated_for_default_agent_rendering",
+  "description": "DeepSeek/Claude Vue 3 animated implementation retained only as an experimental legacy-vue-spa renderer.",
+  "canonical_template_pack": "../templates/animated-retail/template-manifest.json",
+  "default_agent_renderer": false,
+  "requires_runtime": [
+    "Vue 3 global runtime",
+    "/firmware/agent-bridge.js",
+    "/firmware/AncfAnimatedCatalog.vue.js",
+    "/firmware/AncfAnimatedProductDetail.vue.js"
+  ],
+  "legacy_vue_components": [
+    {
+      "file": "src/AncfAnimatedCatalog.vue",
+      "dist": "dist/AncfAnimatedCatalog.vue.js",
+      "tag": "ancf-catalog",
+      "description": "Animated GPU compute product catalog with search, category pills, and card grid."
+    },
+    {
+      "file": "src/AncfAnimatedProductDetail.vue",
+      "dist": "dist/AncfAnimatedProductDetail.vue.js",
+      "tag": "ancf-product-detail",
+      "description": "Animated product detail with integrated quote builder and checkout trigger."
+    }
+  ],
+  "do_not_use_for": [
+    "Agent one-shot HTML rendering",
+    "Stitch fixed template payload injection",
+    "low-token local commerce UI generation"
+  ],
+  "use_instead": {
+    "catalog_template": "../templates/animated-retail/html/ancf-animated-catalog.template.html",
+    "product_detail_template": "../templates/animated-retail/html/ancf-animated-product-detail.template.html",
+    "event_contract": [
+      "ANCF_TEMPLATE_SELECT",
+      "ANCF_TEMPLATE_QUOTE",
+      "ANCF_TEMPLATE_BACK"
+    ]
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdn.yourshop.com/ancf/v1/quote.schema.json",
+  "title": "ANCF Quote Request and Response",
+  "description": "Schema definitions for quote request and quote response",
+  "definitions": {
+    "quote_request": {
+      "type": "object",
+      "description": "Request body for POST /api/v1/cli/quote",
+      "required": ["wallet", "network", "lines"],
+      "properties": {
+        "wallet": {
+          "type": "string",
+          "description": "User wallet public key or address",
+          "minLength": 1,
+          "examples": ["USER_WALLET"]
+        },
+        "network": {
+          "type": "string",
+          "description": "Blockchain network for the transaction",
+          "enum": ["solana-mainnet", "sonic-l2", "solana-devnet"]
+        },
+        "payment_rail": {
+          "type": "string",
+          "description": "Optional payment rail override (e.g. alipay_a2a for fiat payment)",
+          "examples": ["alipay_a2a", "agentpay_ledger"]
+        },
+        "lines": {
+          "type": "array",
+          "description": "Line items being quoted",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["sku_id", "quantity"],
+            "properties": {
+              "sku_id": {
+                "type": "string",
+                "description": "SKU identifier",
+                "minLength": 1,
+                "examples": ["sku_h100_v1"]
+              },
+              "quantity": {
+                "type": "integer",
+                "description": "Number of units",
+                "exclusiveMinimum": 0,
+                "examples": [2]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "quote_line": {
+      "type": "object",
+      "description": "A single line in a quote response",
+      "required": ["sku_id", "quantity", "unit_price_minor", "line_total_minor"],
+      "properties": {
+        "sku_id": {
+          "type": "string",
+          "description": "SKU identifier",
+          "minLength": 1
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "unit_price_minor": {
+          "type": "string",
+          "description": "Per-unit price in minor units",
+          "pattern": "^[0-9]+$"
+        },
+        "line_total_minor": {
+          "type": "string",
+          "description": "Line total (unit_price_minor * quantity) in minor units",
+          "pattern": "^[0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "quote_response": {
+      "type": "object",
+      "description": "Response body for POST /api/v1/cli/quote",
+      "required": ["quote_id", "currency", "total_minor", "scale", "expires_at", "lines"],
+      "properties": {
+        "quote_id": {
+          "type": "string",
+          "description": "Unique quote identifier",
+          "pattern": "^quote_",
+          "examples": ["quote_01J..."]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code for this quote",
+          "enum": ["AGP", "CNY"]
+        },
+        "total_minor": {
+          "type": "string",
+          "description": "Total amount in minor units",
+          "pattern": "^[0-9]+$",
+          "examples": ["4900000"]
+        },
+        "scale": {
+          "type": "integer",
+          "description": "Number of decimal places for all amount fields",
+          "minimum": 0,
+          "examples": [6]
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when this quote expires (typically 5 minutes from creation)"
+        },
+        "lines": {
+          "type": "array",
+          "description": "Quoted line items",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/quote_line"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

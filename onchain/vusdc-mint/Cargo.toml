@@ -1,0 +1,33 @@
+[package]
+name = "vusdc-mint"
+version = "1.0.0"
+edition = "2021"
+description = "ANCF AGP Token-2022 Mint — deploy and mint on Solana"
+
+[dependencies]
+# Solana SDK (off-chain client + on-chain program types)
+solana-client = "2.1"
+solana-sdk = "2.1"
+
+# SPL Token-2022 — the modern token program with extensions
+# Replaces the legacy spl-token (v3.x) for all ANCF AGP operations
+spl-token-2022 = "7.0"
+
+# SPL Associated Token Account — derive & create ATAs
+# v6.0 re-exports get_associated_token_address_with_program_id
+# and instruction::create_associated_token_account_idempotent
+spl-associated-token-account = "6.0"
+
+# Misc
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bs58 = "0.5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

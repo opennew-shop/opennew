@@ -1,0 +1,19 @@
+{
+  "agent": "ANCF Zero-Frontend Commerce",
+  "version": "4.0",
+  "entry_point": "https://opennew.shop/.well-known/agent-rules.json",
+  "bridge": "https://opennew.shop/bridge",
+  "quick_start": {
+    "step_1": "GET https://opennew.shop/.well-known/agent-rules.json → discover capabilities",
+    "step_2": "POST https://opennew.shop/bridge {command: 'ancf:search', params: {query: 'H100'}} → search products",
+    "step_3": "POST https://opennew.shop/bridge {command: 'ancf:quote', params: {wallet, lines}} → get quote",
+    "step_4": "POST https://opennew.shop/bridge {command: 'ancf:checkout_prepare'|'ancf:checkout_commit'} → checkout",
+    "step_5_catalog": "POST https://opennew.shop/api/v1/catalog/products → create products (needs agent token)"
+  },
+  "auth": {
+    "register": "POST https://opennew.shop/api/v1/auth/register-agent → get agent token",
+    "use": "Include X-ANCF-Agent-Token header in catalog mutation requests"
+  },
+  "supported_commands": ["ancf:search","ancf:rag-search","ancf:quote","ancf:checkout_prepare","ancf:checkout_commit","ancf:ready","ancf:catalog_create","ancf:catalog_list","ancf:catalog_get","ancf:catalog_update","ancf:catalog_delete","ancf:agent_register","ancf:agent_bind_wallet","ancf:agent_info","ancf:payment_create_link","ancf:payment_status"],
+  "note": "All product prices are display-only. Always get a backend quote before checkout."
+}

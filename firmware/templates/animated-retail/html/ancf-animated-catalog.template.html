@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANCF Animated Catalog</title>
+  <style>
+    :root {
+      --ancf-primary: #00FFA3;
+      --ancf-background: #F8FAFC;
+      --ancf-text: #111827;
+      --ancf-surface: #FFFFFF;
+      --ancf-border: #E5E7EB;
+      --ancf-muted: #6B7280;
+      --ancf-warning: #FFAA00;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--ancf-background);
+      color: var(--ancf-text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .app { min-height: 100vh; padding: 12px 12px 76px; }
+    .topbar, .intro, .product-row, .protocol-panel, .bottom-nav {
+      background: var(--ancf-surface);
+      border: 1px solid var(--ancf-border);
+      border-radius: 8px;
+    }
+    .topbar { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 12px; }
+    .icon-btn, .quote-btn, .chip, .nav-item {
+      border: 1px solid var(--ancf-border);
+      background: transparent;
+      color: inherit;
+      border-radius: 8px;
+      min-height: 36px;
+      cursor: pointer;
+    }
+    .icon-btn { width: 36px; }
+    .eyebrow, .kicker, .panel-label, .sku, .stock { margin: 0; color: var(--ancf-muted); font-size: 11px; line-height: 1.2; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 13px; font-weight: 700; }
+    .status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--ancf-muted); font-size: 11px; }
+    .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ancf-primary); }
+    .intro { margin-top: 12px; padding: 16px; }
+    .intro h2 { margin-top: 4px; font-size: clamp(32px, 10vw, 56px); line-height: .94; letter-spacing: 0; }
+    .intro p:not(.kicker) { margin-top: 10px; color: var(--ancf-muted); max-width: 560px; }
+    .search-row { margin-top: 18px; display: grid; gap: 10px; }
+    .search { display: flex; align-items: center; gap: 8px; min-height: 42px; border: 1px solid var(--ancf-border); border-radius: 8px; padding: 0 12px; }
+    .search span { color: var(--ancf-muted); font-size: 11px; }
+    .search input { width: 100%; border: 0; outline: 0; background: transparent; color: inherit; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; }
+    .chip { padding: 0 12px; white-space: nowrap; }
+    .chip.active, .quote-btn { border-color: var(--ancf-primary); color: #003920; background: var(--ancf-primary); }
+    .product-list { margin-top: 12px; display: grid; gap: 10px; }
+    .product-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 10px; animation: rowIn 420ms ease both; animation-delay: var(--delay); }
+    .media { border: 1px solid var(--ancf-border); border-radius: 8px; background: #111827; color: var(--ancf-primary); aspect-ratio: 1; overflow: hidden; display: grid; place-items: center; }
+    .media img { width: 100%; height: 100%; object-fit: cover; display: block; filter: grayscale(.15); }
+    .summary { min-width: 0; }
+    .summary-head { display: flex; align-items: center; gap: 8px; }
+    .sku { font-family: "SFMono-Regular", Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stock { margin-left: auto; color: #007146; }
+    .stock.low { color: #B45309; }
+    h3 { margin-top: 4px; font-size: 15px; line-height: 1.25; }
+    .specs { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0; }
+    .specs span { display: inline-flex; gap: 4px; border: 1px solid var(--ancf-border); border-radius: 999px; padding: 3px 7px; font-size: 11px; }
+    .commerce { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .price { font-weight: 800; }
+    .quote-btn { min-width: 92px; }
+    .protocol-panel { margin-top: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; }
+    .protocol-panel > div { padding: 10px; }
+    .protocol-panel strong, .protocol-panel code { display: block; margin-top: 4px; font-size: 13px; }
+    .bottom-nav { position: fixed; left: 12px; right: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px; }
+    .nav-item { font-size: 12px; }
+    .nav-item.active { color: #003920; border-color: var(--ancf-primary); background: var(--ancf-primary); }
+    @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (min-width: 900px) {
+      .app { max-width: 1180px; margin: 0 auto; padding-bottom: 92px; }
+      .search-row { grid-template-columns: minmax(280px, 1fr) auto; align-items: center; }
+      .product-row { grid-template-columns: 116px minmax(0, 1fr) 160px; align-items: center; }
+      .commerce { grid-column: auto; display: grid; justify-items: end; }
+    }
+  </style>
+</head>
+<body>
+  <script id="ancf-payload" type="application/json">
+  {
+    "shopLabel": "zero_shop_sol_01",
+    "title": "ANCF Shop",
+    "heading": "Compute Infrastructure",
+    "description": "Backend-authoritative product data rendered locally by an Agent.",
+    "categoryLabel": "Display-only catalog",
+    "manifestStatus": "Manifest valid",
+    "products": []
+  }
+  </script>
+
+  <main class="app" id="app"></main>
+
+  <script>
+    (function () {
+      var payload = JSON.parse(document.getElementById('ancf-payload').textContent || '{}');
+      var labels = payload.labels || {};
+      var state = { query: '', filter: 'All' };
+      var filters = payload.filters || ['All', 'GPU', 'API', 'Storage'];
+      var products = Array.isArray(payload.products) ? payload.products : [];
+      var app = document.getElementById('app');
+
+      function t(key, fallback) {
+        var value = labels[key];
+        return typeof value === 'string' ? value : fallback;
+      }
+
+      function filterText(key) {
+        var map = labels.filters || {};
+        return typeof map[key] === 'string' ? map[key] : key;
+      }
+
+      document.documentElement.lang = t('htmlLang', payload.locale || 'en');
+      document.title = t('pageTitleCatalog', 'ANCF Animated Catalog');
+
+      function esc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[ch];
+        });
+      }
+
+      function attr(value) {
+        return esc(value).replace(/`/g, '&#x60;');
+      }
+
+      function priceText(price) {
+        if (!price) return '';
+        var amount = Number(BigInt(price.amount_minor || '0')) / Math.pow(10, price.scale || 0);
+        return amount.toFixed(Math.min(price.scale || 0, 6)) + ' ' + esc(price.currency || '');
+      }
+
+      function stockText(stock) {
+        if (stock === undefined || stock === null) return t('stockHidden', 'Stock hidden');
+        if (stock === 0) return t('stockOut', 'Out');
+        if (stock < 10) return stock + ' ' + t('stockLeft', 'left');
+        return stock + ' ' + t('stockAvailable', 'available');
+      }
+
+      function visibleProducts() {
+        var query = state.query.trim().toLowerCase();
+        return products.filter(function (item) {
+          var specs = Object.values(item.specs || {}).join(' ');
+          var text = [item.sku_id, item.title, specs].join(' ').toLowerCase();
+          var categoryOk = state.filter === 'All' || item.category === state.filter;
+          return categoryOk && (!query || text.indexOf(query) !== -1);
+        }).slice(0, payload.maxItems || 24);
+      }
+
+      function emit(name, detail) {
+        document.dispatchEvent(new CustomEvent(name, { detail: detail }));
+        if (window.AgentBridge) {
+          window.AgentBridge.postMessage(JSON.stringify({ command: name, payload: detail }));
+        }
+      }
+
+      function render() {
+        var rows = visibleProducts();
+        app.innerHTML = [
+          '<header class="topbar">',
+          '<button class="icon-btn" type="button" data-action="back" aria-label="Back">&lt;</button>',
+          '<div><p class="eyebrow">' + esc(payload.shopLabel || 'zero_shop_sol_01') + '</p><h1>' + esc(payload.title || t('catalogTitle', 'ANCF Shop')) + '</h1></div>',
+          '<div class="status"><span class="dot"></span><span>' + esc(payload.manifestStatus || t('manifestValid', 'Manifest valid')) + '</span></div>',
+          '</header>',
+          '<section class="intro">',
+          '<p class="kicker">' + esc(payload.categoryLabel || t('catalogCategoryLabel', 'Display-only catalog')) + '</p>',
+          '<h2>' + esc(payload.heading || t('catalogHeading', 'Compute Infrastructure')) + '</h2>',
+          '<p>' + esc(payload.description || '') + '</p>',
+          '<div class="search-row"><label class="search"><span>' + esc(t('searchLabel', 'Search')) + '</span><input id="search" value="' + attr(state.query) + '" placeholder="' + attr(payload.searchPlaceholder || t('searchPlaceholder', 'Search SKU, GPU, capability')) + '"></label>',
+          '<div class="chips">' + filters.map(function (f) { return '<button class="chip ' + (state.filter === f ? 'active' : '') + '" data-filter="' + attr(f) + '">' + esc(filterText(f)) + '</button>'; }).join('') + '</div></div>',
+          '</section>',
+          '<section class="product-list">' + rows.map(function (item, i) {
+            var specs = Object.entries(item.specs || {}).slice(0, 3).map(function (entry) {
+              return '<span><b>' + esc(entry[0]) + '</b> ' + esc(entry[1]) + '</span>';
+            }).join('');
+            var thumb = item.media && item.media.thumbnail
+              ? '<img src="' + attr(item.media.thumbnail) + '" alt="' + attr(item.title) + '" loading="lazy">'
+              : '<span>' + esc(String(item.title || 'AN').slice(0, 2).toUpperCase()) + '</span>';
+            return '<article class="product-row" style="--delay:' + (i * 42) + 'ms">' +
+              '<button class="media" data-select="' + attr(item.sku_id) + '">' + thumb + '</button>' +
+              '<div class="summary"><div class="summary-head"><p class="sku">' + esc(item.sku_id) + '</p><span class="stock">' + esc(stockText(item.stock_hint)) + '</span></div><h3>' + esc(item.title) + '</h3><div class="specs">' + specs + '</div></div>' +
+              '<div class="commerce"><p class="price">' + priceText(item.price) + '</p><button class="quote-btn" data-quote="' + attr(item.sku_id) + '">' + esc(t('quote', 'Quote')) + '</button></div>' +
+              '</article>';
+          }).join('') + '</section>',
+          '<aside class="protocol-panel"><div><p class="panel-label">' + esc(t('agentIntake', 'Agent Intake')) + '</p><strong>' + rows.length + '</strong><span> ' + esc(t('itemsRendered', 'items rendered')) + '</span></div><div><p class="panel-label">' + esc(t('bridge', 'Bridge')) + '</p><code>ancf:search</code></div><div><p class="panel-label">' + esc(t('payload', 'Payload')) + '</p><code>' + Math.ceil(JSON.stringify(rows).length / 1024) + 'KB</code></div></aside>',
+          '<footer class="bottom-nav"><button class="nav-item active">' + esc(t('navCatalog', 'Catalog')) + '</button><button class="nav-item">' + esc(t('navQuote', 'Quote')) + '</button><button class="nav-item">' + esc(t('navCheckout', 'Checkout')) + '</button></footer>'
+        ].join('');
+
+        document.getElementById('search').addEventListener('input', function (event) {
+          state.query = event.target.value;
+          render();
+        });
+      }
+
+      document.addEventListener('click', function (event) {
+        var target = event.target.closest('[data-filter],[data-select],[data-quote],[data-action]');
+        if (!target) return;
+        if (target.dataset.filter) { state.filter = target.dataset.filter; render(); return; }
+        if (target.dataset.action === 'back') { emit('ANCF_TEMPLATE_BACK', {}); return; }
+        var sku = target.dataset.select || target.dataset.quote;
+        var item = products.find(function (p) { return p.sku_id === sku; });
+        if (!item) return;
+        emit(target.dataset.quote ? 'ANCF_TEMPLATE_QUOTE' : 'ANCF_TEMPLATE_SELECT', item);
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

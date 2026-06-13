@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdn.yourshop.com/ancf/v1/mint.schema.json",
+  "title": "ANCF Mint and Redemption",
+  "description": "Schema definitions for AGP deposit intent (mint) and redemption requests",
+  "definitions": {
+    "deposit_intent_request": {
+      "type": "object",
+      "description": "Request body for POST /api/v1/wallet/deposit-intents",
+      "required": ["wallet", "network", "asset_symbol", "amount_minor"],
+      "properties": {
+        "wallet": {
+          "type": "string",
+          "description": "User wallet public key or address to credit with AGP",
+          "minLength": 1
+        },
+        "network": {
+          "type": "string",
+          "enum": ["solana-mainnet", "sonic-l2", "solana-devnet"]
+        },
+        "asset_symbol": {
+          "type": "string",
+          "description": "Asset symbol being deposited (e.g. USDC or SOL)",
+          "minLength": 1,
+          "examples": ["USDC"]
+        },
+        "amount_minor": {
+          "type": "string",
+          "description": "Deposit amount in minor units of the source asset",
+          "pattern": "^[0-9]+$"
+        },
+        "payment_rail": {
+          "type": "string",
+          "description": "Optional: payment rail for fiat-backed mint (e.g. alipay_a2a)",
+          "examples": ["alipay_a2a"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "deposit_intent_response": {
+      "type": "object",
+      "description": "Response body for POST /api/v1/wallet/deposit-intents",
+      "required": ["deposit_intent_id", "reserve_address"],
+      "properties": {
+        "deposit_intent_id": {
+          "type": "string",
+          "description": "Unique deposit intent identifier",
+          "pattern": "^deposit_",
+          "examples": ["deposit_01J..."]
+        },
+        "reserve_address": {
+          "type": "string",
+          "description": "Platform reserve address where the user should send their deposit",
+          "minLength": 1
+        },
+        "memo": {
+          "type": "string",
+          "description": "Memo or reference string the user should include with the on-chain transfer"
+        },
+        "expected_asset": {
+          "type": "string",
+          "description": "Expected source asset symbol",
+          "examples": ["USDC"]
+        },
+        "expected_amount_minor": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this deposit intent expires"
+        },
+        "network": {
+          "type": "string",
+          "enum": ["solana-mainnet", "sonic-l2", "solana-devnet"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "confirmed", "credited", "failed", "expired"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "redemption_request": {
+      "type": "object",
+      "description": "Request body for POST /api/v1/wallet/redeem",
+      "required": ["wallet", "network", "asset_symbol", "amount_minor"],
+      "properties": {
+        "wallet": {
+          "type": "string",
+          "description": "User wallet public key or address",
+          "minLength": 1
+        },
+        "network": {
+          "type": "string",
+          "enum": ["solana-mainnet", "sonic-l2", "solana-devnet"]
+        },
+        "asset_symbol": {
+          "type": "string",
+          "description": "Asset symbol to redeem (e.g. AGP)",
+          "minLength": 1,
+          "examples": ["AGP"]
+        },
+        "amount_minor": {
+          "type": "string",
+          "description": "Amount to redeem in minor units",
+          "pattern": "^[0-9]+$"
+        },
+        "destination_address": {
+          "type": "string",
+          "description": "Optional: destination address for the payout (defaults to wallet)"
+        },
+        "destination_asset": {
+          "type": "string",
+          "description": "Optional: desired payout asset (defaults to the underlying reserve asset)",
+          "examples": ["USDC"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "redemption_response": {
+      "type": "object",
+      "description": "Response body for POST /api/v1/wallet/redeem",
+      "required": ["redemption_id", "status"],
+      "properties": {
+        "redemption_id": {
+          "type": "string",
+          "description": "Unique redemption identifier",
+          "pattern": "^redemption_",
+          "examples": ["redemption_01J..."]
+        },
+        "status": {
+          "type": "string",
+          "description": "Redemption status",
+          "enum": ["created", "balance_locked", "burn_submitted", "burned", "payout_submitted", "paid", "failed", "released"]
+        },
+        "asset_symbol": {
+          "type": "string"
+        },
+        "amount_minor": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "destination_address": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "failure_reason": {
+          "type": "string",
+          "description": "Reason for failure if status is 'failed'"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,148 @@
+<!--
+  ANCF Animated Product Detail Template
+  单次 HTML：可直接在浏览器打开，或由 Agent 渲染器服务
+  基于 Vue 3 CDN + AncfAnimatedProductDetail 组件
+  模板变量: {{VARIABLE_NAME}}
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PRODUCT_TITLE}} — ANCF Checkout</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{
+      background:var(--ancf-background, #0D0E12);
+      color:var(--ancf-text, #FFFFFF);
+      font-family:'Inter', system-ui, -apple-system, sans-serif;
+      min-height:100vh;
+      -webkit-font-smoothing:antialiased;
+    }
+    .app-shell{max-width:720px;margin:0 auto;padding:20px}
+
+    /* Warning Banner */
+    .warning-banner{
+      display:flex;align-items:flex-start;gap:10px;
+      padding:14px 18px;margin-bottom:20px;
+      border-radius:12px;
+      background:linear-gradient(135deg, #2A1A00, #1A0A00);
+      border:1px solid rgba(255,136,0,0.3);
+      color:#FFAA00;font-size:13px;line-height:1.6;
+    }
+    .warning-banner .icon{font-size:20px;flex-shrink:0;margin-top:1px}
+
+    /* Shop Header */
+    .shop-header{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:12px 18px;margin-bottom:16px;
+      background:var(--ancf-surface, #13141F);
+      border:1px solid var(--ancf-border, #1E2030);border-radius:10px;
+      font-size:12px;color:#888;
+    }
+    .shop-header strong{color:#aaa}
+    .shop-dot{width:7px;height:7px;border-radius:50%;background:#00FFA3;display:inline-block;margin-right:6px;box-shadow:0 0 6px #00FFA3}
+  </style>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- Warning -->
+    <div class="warning-banner">
+      <span class="icon">&#9888;</span>
+      <span><strong>Local Temporary Checkout UI</strong><br>
+      Non-authoritative. Prices and status verified by backend.</span>
+    </div>
+
+    <!-- Shop Header -->
+    <div class="shop-header">
+      <span><span class="shop-dot"></span><strong>{{SHOP_DOMAIN}}</strong></span>
+      <span>Shop: <strong>{{SHOP_ID}}</strong></span>
+      <span>Network: <strong>{{NETWORK}}</strong></span>
+    </div>
+
+    <!-- Product Detail -->
+    <ancf-product-detail
+      :product="product"
+      :api-base="apiBase"
+      :wallet="wallet"
+      :network="network"
+      :shop-domain="shopDomain"
+      :shop-id="shopId"
+      :agent-session-id="agentSessionId"
+      @back="onBack"
+      @quote-ready="onQuoteReady"
+      @confirm-checkout="onConfirmCheckout"
+    ></ancf-product-detail>
+
+    <!-- Checkout Status -->
+    <div v-if="checkoutResult" class="checkout-result" :class="checkoutResult.status">
+      <svg v-if="checkoutResult.status==='committed'" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00FFA3" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+      <h3>{{ checkoutResult.status === 'committed' ? 'Checkout Confirmed' : 'Checkout Failed' }}</h3>
+      <p v-if="checkoutResult.order_id">Order ID: {{ checkoutResult.order_id }}</p>
+      <button class="btn-back-to-catalog" @click="onBack">← Back to Catalog</button>
+    </div>
+  </div>
+
+  <script src="/firmware/vue.global.js"></script>
+  <script type="module" src="/firmware/agent-bridge.js"></script>
+  <script type="module" src="/firmware/AncfAnimatedProductDetail.vue.js"></script>
+
+  <script type="module">
+    import AncfAnimatedProductDetail from '/firmware/AncfAnimatedProductDetail.vue.js';
+
+    const { createApp, ref } = Vue;
+
+    createApp({
+      components: { 'ancf-product-detail': AncfAnimatedProductDetail },
+      setup() {
+        const apiBase = ref('{{API_BASE}}');
+        const wallet = ref('{{WALLET}}');
+        const network = ref('{{NETWORK}}');
+        const shopDomain = ref('{{SHOP_DOMAIN}}');
+        const shopId = ref('{{SHOP_ID}}');
+        const agentSessionId = ref('{{AGENT_SESSION_ID}}');
+        const product = ref({{PRODUCT_JSON}});
+        const checkoutResult = ref(null);
+
+        function onBack() {
+          window.history.back();
+        }
+
+        function onQuoteReady(quote) { /* optional log */ }
+
+        async function onConfirmCheckout({ quote_id, product, qty, wallet: w }) {
+          const bridge = window.__ancfBridge;
+          if (!bridge) { alert('Agent Bridge not available'); return; }
+          try {
+            const prepareResp = await bridge.handleCommand({
+              command: 'ancf:checkout_prepare',
+              params: { quote_id, wallet: w || wallet.value, network: network.value, agent_session_id: agentSessionId.value },
+              requestId: crypto.randomUUID?.() || Date.now().toString(36)
+            });
+            if (prepareResp.error) { checkoutResult.value = { status: 'failed', error: prepareResp.error }; return; }
+            const intent = prepareResp.result || prepareResp;
+            const sig = prompt(`Sign for intent ${intent.order_intent_id}:`, 'demo_sig');
+            if (!sig) return;
+            const commitResp = await bridge.handleCommand({
+              command: 'ancf:checkout_commit',
+              params: {
+                order_intent_id: intent.order_intent_id, quote_id, wallet: w || wallet.value,
+                wallet_signature: sig, agent_session_id: agentSessionId.value,
+                idempotency_key: 'ck_' + crypto.randomUUID?.() || Date.now().toString(36)
+              },
+              requestId: crypto.randomUUID?.() || Date.now().toString(36)
+            });
+            checkoutResult.value = commitResp.error
+              ? { status: 'failed', error: commitResp.error }
+              : { status: 'committed', order_id: (commitResp.result || commitResp).order_id };
+          } catch (e) {
+            checkoutResult.value = { status: 'failed', error: e.message };
+          }
+        }
+
+        return { apiBase, wallet, network, shopDomain, shopId, agentSessionId, product, checkoutResult, onBack, onQuoteReady, onConfirmCheckout };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

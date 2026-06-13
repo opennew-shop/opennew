@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ancf-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ancf
+      POSTGRES_USER: ancf
+      POSTGRES_PASSWORD: ancf
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ancf -d ancf"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ancf-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: ancf-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ancf-net
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: ancf-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://ancf:ancf@postgres:5432/ancf?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      API_PORT: "8080"
+      LOG_LEVEL: info
+      JWT_SECRET: change-me-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ancf-net
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  ancf-net:
+    driver: bridge

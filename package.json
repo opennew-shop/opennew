@@ -1,0 +1,27 @@
+{
+  "name": "sol-web-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "load-test": "k6 run tests/load/k6-checkout.js",
+    "load-test-rag": "k6 run tests/load/k6-search-rag.js",
+    "pgvector-up": "docker compose -f infra/docker-compose-pgvector.yml up -d",
+    "build-all": "bash services/scripts/build-all.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@solana/spl-token-metadata": "^0.1.6",
+    "@solana/web3.js": "^1.98.4",
+    "bs58": "^6.0.0",
+    "ssh2": "^1.17.0"
+  }
+}

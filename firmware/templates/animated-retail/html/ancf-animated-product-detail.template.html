@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANCF Animated Product Detail</title>
+  <style>
+    :root {
+      --ancf-primary: #00FFA3;
+      --ancf-background: #F8FAFC;
+      --ancf-text: #111827;
+      --ancf-surface: #FFFFFF;
+      --ancf-border: #E5E7EB;
+      --ancf-muted: #6B7280;
+      --ancf-warning: #FFAA00;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--ancf-background); color: var(--ancf-text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .app { min-height: 100vh; padding: 12px 12px 88px; }
+    .topbar, .summary, .spec-grid article, .protocol, .safety, .action-bar {
+      background: var(--ancf-surface);
+      border: 1px solid var(--ancf-border);
+      border-radius: 8px;
+    }
+    .topbar { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 10px; }
+    .icon-btn, .primary, .secondary, .gallery button {
+      border: 1px solid var(--ancf-border);
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+    }
+    .icon-btn { width: 36px; height: 36px; }
+    .topbar p { margin: 0; font-weight: 700; }
+    .status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--ancf-muted); font-size: 11px; }
+    .status i { width: 6px; height: 6px; border-radius: 999px; background: var(--ancf-primary); }
+    .hero { margin-top: 12px; }
+    .media-shell { display: grid; place-items: center; aspect-ratio: 1 / .82; border: 1px solid var(--ancf-border); border-radius: 8px; background: #111827; color: var(--ancf-primary); overflow: hidden; }
+    .media-shell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+    .gallery button { aspect-ratio: 1; padding: 0; overflow: hidden; }
+    .gallery button.active { border-color: var(--ancf-primary); }
+    .gallery img { width: 100%; height: 100%; object-fit: cover; }
+    .summary { margin-top: 12px; padding: 16px; }
+    .sku-row, .price-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .sku-row code, .price-row span, .protocol p, .safety p, .action-bar span { color: var(--ancf-muted); font-size: 12px; }
+    .sku-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    h1 { margin: 12px 0 0; font-size: clamp(28px, 9vw, 52px); line-height: .96; letter-spacing: 0; }
+    .price-row { margin-top: 16px; }
+    .price-row strong { color: #003920; background: var(--ancf-primary); border-radius: 999px; padding: 6px 10px; font-size: 17px; }
+    .description { margin: 14px 0 0; color: var(--ancf-muted); line-height: 1.55; }
+    .spec-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+    .spec-grid article { padding: 12px; }
+    .spec-grid span, .protocol p, .safety strong { display: block; color: var(--ancf-muted); font-size: 11px; text-transform: uppercase; }
+    .spec-grid strong, .protocol strong, .protocol code { display: block; margin-top: 4px; font-size: 13px; }
+    .protocol { margin-top: 12px; display: grid; gap: 1px; overflow: hidden; }
+    .protocol > div { padding: 12px; }
+    .safety { margin-top: 12px; padding: 12px; border-color: var(--ancf-warning); }
+    .safety strong { color: #A16207; }
+    .safety p { margin: 6px 0 0; }
+    .action-bar { position: fixed; left: 12px; right: 12px; bottom: 12px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 8px; }
+    .action-bar strong { display: block; font-size: 13px; }
+    .primary, .secondary { min-height: 38px; padding: 0 12px; }
+    .primary { border-color: var(--ancf-primary); background: var(--ancf-primary); color: #003920; font-weight: 700; }
+    @media (min-width: 900px) {
+      .app { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr); gap: 12px; }
+      .topbar, .action-bar { grid-column: 1 / -1; }
+      .hero, .summary { margin-top: 0; }
+      .spec-grid, .protocol, .safety { grid-column: 2; }
+    }
+  </style>
+</head>
+<body>
+  <script id="ancf-payload" type="application/json">
+  {
+    "shopLabel": "ANCF Shop",
+    "manifestStatus": "manifest active",
+    "protocolVersion": "ANCF-1.0",
+    "product": {
+      "sku_id": "sku_gpu_h100_v1",
+      "title": "H100 Tensor Core",
+      "description": "Display-only detail payload. Backend quote is required before checkout.",
+      "price": { "currency": "AGP", "amount_minor": "2450000", "scale": 6 },
+      "stock_hint": 42,
+      "specs": { "GPU": "80GB SXM5", "CUDA": "12.4", "Memory": "80GB HBM3" },
+      "media": { "thumbnail": "", "gallery": [] }
+    }
+  }
+  </script>
+
+  <main class="app" id="app"></main>
+
+  <script>
+    (function () {
+      var payload = JSON.parse(document.getElementById('ancf-payload').textContent || '{}');
+      var labels = payload.labels || {};
+      var product = payload.product || {};
+      var activeImage = 0;
+      var app = document.getElementById('app');
+
+      function t(key, fallback) {
+        var value = labels[key];
+        return typeof value === 'string' ? value : fallback;
+      }
+
+      document.documentElement.lang = t('htmlLang', payload.locale || 'en');
+      document.title = t('pageTitleDetail', 'ANCF Animated Product Detail');
+
+      function esc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[ch];
+        });
+      }
+
+      function attr(value) {
+        return esc(value).replace(/`/g, '&#x60;');
+      }
+
+      function priceText(price) {
+        price = price || {};
+        var amount = Number(BigInt(price.amount_minor || '0')) / Math.pow(10, price.scale || 0);
+        return amount.toFixed(Math.min(price.scale || 0, 6)) + ' ' + esc(price.currency || '');
+      }
+
+      function stockText(stock) {
+        if (stock === undefined || stock === null) return t('stockHidden', 'stock hidden');
+        if (stock === 0) return t('stockOut', 'out of stock');
+        if (stock < 10) return stock + ' ' + t('stockLeft', 'left');
+        return stock + ' ' + t('stockAvailable', 'available');
+      }
+
+      function gallery() {
+        var media = product.media || {};
+        var list = Array.isArray(media.gallery) && media.gallery.length ? media.gallery : (media.thumbnail ? [media.thumbnail] : []);
+        return list.filter(Boolean);
+      }
+
+      function emit(name, detail) {
+        document.dispatchEvent(new CustomEvent(name, { detail: detail }));
+        if (window.AgentBridge) {
+          window.AgentBridge.postMessage(JSON.stringify({ command: name, payload: detail }));
+        }
+      }
+
+      function render() {
+        var images = gallery();
+        var hero = images[activeImage] || (product.media && product.media.thumbnail) || '';
+        var specs = Object.entries(product.specs || {}).map(function (entry) {
+          return '<article><span>' + esc(entry[0]) + '</span><strong>' + esc(entry[1]) + '</strong></article>';
+        }).join('');
+        var heroHtml = hero
+          ? '<img src="' + attr(hero) + '" alt="' + attr(product.title) + '">'
+          : '<span>' + esc(String(product.title || 'AN').slice(0, 2).toUpperCase()) + '</span>';
+        var galleryHtml = images.length > 1
+          ? '<div class="gallery">' + images.map(function (image, index) {
+              return '<button class="' + (index === activeImage ? 'active' : '') + '" data-image="' + index + '"><img src="' + attr(image) + '" alt="' + attr(product.title) + ' ' + (index + 1) + '"></button>';
+            }).join('') + '</div>'
+          : '';
+        app.innerHTML = [
+          '<header class="topbar"><button class="icon-btn" data-action="back" aria-label="Back">&lt;</button><p>' + esc(payload.shopLabel || t('catalogTitle', 'ANCF Shop')) + '</p><span class="status"><i></i>' + esc(payload.manifestStatus || t('manifestActive', 'manifest active')) + '</span></header>',
+          '<section class="hero"><div class="media-shell">' + heroHtml + '</div>' + galleryHtml + '</section>',
+          '<section class="summary"><div class="sku-row"><code>' + esc(product.sku_id) + '</code><span>' + esc(stockText(product.stock_hint)) + '</span></div><h1>' + esc(product.title) + '</h1><div class="price-row"><strong>' + priceText(product.price) + '</strong><span>' + esc(t('backendQuoteRequired', 'backend quote required')) + '</span></div><p class="description">' + esc(product.description || t('catalogDescription', 'Agent-rendered product detail. Display data is not authoritative for checkout.')) + '</p></section>',
+          '<section class="spec-grid">' + specs + '</section>',
+          '<section class="protocol"><div><p>' + esc(t('protocol', 'Protocol')) + '</p><strong>' + esc(payload.protocolVersion || 'ANCF-1.0') + '</strong></div><div><p>' + esc(t('bridgeCommand', 'Bridge Command')) + '</p><code>ancf:quote</code></div><div><p>' + esc(t('trustBoundary', 'Trust Boundary')) + '</p><strong>' + esc(t('backendAuthoritative', 'Backend Authoritative')) + '</strong></div></section>',
+          '<section class="safety"><strong>' + esc(t('securityNotice', 'Security notice')) + '</strong><p>' + esc(t('securityNoticeBody', 'This local view is generated by an Agent. Price, stock, payment status, and service activation must be confirmed by backend quote and checkout APIs.')) + '</p></section>',
+          '<footer class="action-bar"><div><span>' + esc(t('totalPreview', 'Total preview')) + '</span><strong>' + priceText(product.price) + '</strong></div><button class="secondary" data-action="select">' + esc(t('select', 'Select')) + '</button><button class="primary" data-action="quote">' + esc(t('requestQuote', 'Request Quote')) + '</button></footer>'
+        ].join('');
+      }
+
+      document.addEventListener('click', function (event) {
+        var target = event.target.closest('[data-image],[data-action]');
+        if (!target) return;
+        if (target.dataset.image) { activeImage = Number(target.dataset.image); render(); return; }
+        if (target.dataset.action === 'back') { emit('ANCF_TEMPLATE_BACK', {}); return; }
+        if (target.dataset.action === 'select') { emit('ANCF_TEMPLATE_SELECT', product); return; }
+        if (target.dataset.action === 'quote') { emit('ANCF_TEMPLATE_QUOTE', product); return; }
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "@ancf/agent-node-renderer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ANCF Node Agent Local Renderer — fetches manifest, validates schemas, hosts local checkout UI with Web Components, and provides Agent Bridge API proxy",
+  "main": "dist/agent.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/agent.js",
+    "dev": "node --loader ts-node/esm src/agent.ts"
+  },
+  "dependencies": {
+    "express": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.12.0",
+    "typescript": "^5.4.0"
+  }
+}

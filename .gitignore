@@ -1,0 +1,31 @@
+node_modules/
+dist/
+logs/
+*.log
+.env
+.env.*
+!.env.example
+# Sensitive keys & wallets
+payer.json
+.mock-state.json
+*.mock-state.json
+multisig-*.json
+test-wallet.json
+multisig-auth.json
+multisig-cold-key.json
+multisig-manifest.json
+multisig-authority-manifest.json
+deploy-manifest.json
+*-keypair.json
+# Build & runtime
+*.exe
+target/
+*.screenshot.png
+screenshot.png
+# Dependencies (root and sub-project lock files are committed)
+# Temp & IDE
+.stitch/
+.claude/
+.agents/
+# OS
+Thumbs.db

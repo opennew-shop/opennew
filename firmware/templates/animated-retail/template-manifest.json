@@ -1,0 +1,143 @@
+{
+  "template_pack": "ancf-animated-retail",
+  "version": "1.0.0",
+  "source": {
+    "stitch_project_id": "9907418127151602795",
+    "stitch_project_title": "ANCF 商品搜索",
+    "screens": [
+      {
+        "id": "4223438297438515640",
+        "title": "ANCF Catalog (Animated Retail)",
+        "local_html": "../../../.stitch/designs/stitch-animated-retail/ancf-catalog-animated-retail-42234382.html",
+        "local_screenshot": "../../../.stitch/designs/stitch-animated-retail/ancf-catalog-animated-retail-42234382.png"
+      },
+      {
+        "id": "9f4d1029c9be478298bcc35ca175ecd1",
+        "title": "ANCF Catalog (Animated Retail)",
+        "local_html": "../../../.stitch/designs/stitch-animated-retail/ancf-catalog-animated-retail-9f4d1029.html",
+        "local_screenshot": "../../../.stitch/designs/stitch-animated-retail/ancf-catalog-animated-retail-9f4d1029.png"
+      },
+      {
+        "id": "6837659765762598684",
+        "title": "ANCF Product Detail (Animated)",
+        "local_html": "../../../.stitch/designs/stitch-animated-retail/ancf-product-detail-animated-68376597.html",
+        "local_screenshot": "../../../.stitch/designs/stitch-animated-retail/ancf-product-detail-animated-68376597.png"
+      },
+      {
+        "id": "2302bb7157b84820ac9e22abb58d1311",
+        "title": "ANCF Product Detail (Animated)",
+        "local_html": "../../../.stitch/designs/stitch-animated-retail/ancf-product-detail-animated-2302bb71.html",
+        "local_screenshot": "../../../.stitch/designs/stitch-animated-retail/ancf-product-detail-animated-2302bb71.png"
+      }
+    ]
+  },
+  "templates": [
+    {
+      "id": "animated_catalog",
+      "kind": "catalog",
+      "vue_component": "vue/AncfAnimatedCatalog.vue",
+      "html_template": "html/ancf-animated-catalog.template.html",
+      "max_items": 24,
+      "events": ["ANCF_TEMPLATE_SELECT", "ANCF_TEMPLATE_QUOTE", "ANCF_TEMPLATE_BACK"],
+      "payload_schema": {
+        "type": "object",
+        "required": ["products"],
+        "properties": {
+          "shopLabel": { "type": "string" },
+          "locale": { "type": "string", "enum": ["en-US", "zh-CN"] },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "object", "additionalProperties": { "type": "string" } }
+              ]
+            }
+          },
+          "title": { "type": "string" },
+          "heading": { "type": "string" },
+          "description": { "type": "string" },
+          "categoryLabel": { "type": "string" },
+          "manifestStatus": { "type": "string" },
+          "searchPlaceholder": { "type": "string" },
+          "filters": { "type": "array", "items": { "type": "string" } },
+          "products": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/product" }
+          }
+        }
+      }
+    },
+    {
+      "id": "animated_product_detail",
+      "kind": "product_detail",
+      "vue_component": "vue/AncfAnimatedProductDetail.vue",
+      "html_template": "html/ancf-animated-product-detail.template.html",
+      "events": ["ANCF_TEMPLATE_SELECT", "ANCF_TEMPLATE_QUOTE", "ANCF_TEMPLATE_BACK"],
+      "payload_schema": {
+        "type": "object",
+        "required": ["product"],
+        "properties": {
+          "shopLabel": { "type": "string" },
+          "locale": { "type": "string", "enum": ["en-US", "zh-CN"] },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "object", "additionalProperties": { "type": "string" } }
+              ]
+            }
+          },
+          "manifestStatus": { "type": "string" },
+          "protocolVersion": { "type": "string" },
+          "product": { "$ref": "#/$defs/product" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "product": {
+      "type": "object",
+      "required": ["sku_id", "title", "price"],
+      "properties": {
+        "sku_id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "price": {
+          "type": "object",
+          "required": ["currency", "amount_minor", "scale"],
+          "properties": {
+            "currency": { "type": "string" },
+            "amount_minor": { "type": "string", "pattern": "^[0-9]+$" },
+            "scale": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "stock_hint": { "type": "integer", "minimum": 0 },
+        "specs": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "media": {
+          "type": "object",
+          "properties": {
+            "thumbnail": { "type": "string" },
+            "gallery": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "agent_constraints": {
+    "no_remote_runtime_dependencies": true,
+    "html_template_payload_slot": "script#ancf-payload[type='application/json']",
+    "treat_payload_as_untrusted_display_data": true,
+    "checkout_requires_quote_api": true,
+    "events_are_intent_only": true,
+    "bridge_commands_are_not_executed_by_template": true
+  }
+}
