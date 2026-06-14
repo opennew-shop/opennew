@@ -13,6 +13,7 @@
  */
 
 const http = require('http');
+const crypto = require('crypto');
 
 const fs = require('fs');
 const path = require('path');
@@ -529,7 +530,8 @@ function freezeFundsForDispute(orderId, disputeId, orderDetails) {
 function verifyAgentToken(req) {
   const token = req.headers['x-ancf-agent-token'];
   if (!token) return null;
-  const entry = AGENT_TOKENS[token];
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const entry = AGENT_TOKENS[tokenHash];
   if (!entry) return null;
   return { agent_id: entry.agent_id, agent_name: entry.name, permissions: entry.permissions };
 }
@@ -834,15 +836,16 @@ const server = http.createServer((req, res) => {
         if (!data.agent_name) return jsonResponse(res, 400, { code: 400, message: 'agent_name is required' });
         const agentType = data.agent_type || 'general';
 
-        // Generate JWT-style token: ancf_agent_{random32hex}
+        // Generate cryptographically secure token: ancf_agent_{64hex}
         const agentId = generateId('agent_');
-        const randomHex = generateId('').replace(/^[^_]+_?/, ''); // strip prefix, keep raw hex
-        const token = `ancf_agent_${randomHex}`;
+        const token = `ancf_agent_${crypto.randomBytes(32).toString('hex')}`;
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
         const now = new Date().toISOString();
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
 
-        AGENT_TOKENS[token] = {
+        // Store keyed by SHA-256 hash — plaintext token never persisted
+        AGENT_TOKENS[tokenHash] = {
           agent_id: agentId,
           name: data.agent_name,
           agent_type: agentType,
@@ -852,7 +855,7 @@ const server = http.createServer((req, res) => {
         };
         AGENT_PRODUCTS[agentId] = [];
 
-        console.log(`[Mock Auth] Agent registered: ${agentId} (${data.agent_name}), token=${token.slice(0,20)}...`);
+        console.log(`[Mock Auth] Agent registered: ${agentId} (${data.agent_name}), token_hash=${tokenHash.slice(0,12)}...`);
         return jsonResponse(res, 201, {
           agent_id: agentId,
           token: token,
@@ -2238,7 +2241,8 @@ const server = http.createServer((req, res) => {
     if (auth) {
       agentId = auth.agent_id;
     } else if (agentTokenParam) {
-      const entry = AGENT_TOKENS[agentTokenParam];
+      const paramHash = crypto.createHash('sha256').update(agentTokenParam).digest('hex');
+      const entry = AGENT_TOKENS[paramHash];
       if (entry) {
         agentId = entry.agent_id;
       }
