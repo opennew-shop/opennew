@@ -1,3 +1,6 @@
+// Package model 定义双分录账本(ledger)的领域模型与分录构造函数。
+// 每笔价值变动至少生成借、贷两条 ledger_entries,账本不可变,钱包余额由分录派生。
+// 提供 PurchaseHold/Settle/Refund、MintCredit、RedemptionDebit/Release 等分录构造器。
 package model
 
 import (
@@ -27,26 +30,43 @@ type LedgerEntry struct {
 // Account types used in the double-entry ledger.
 // These map to the CHECK constraints on debit_account / credit_account columns.
 const (
+	// AccountUserAvailable 用户可用余额账户
 	AccountUserAvailable       = "user_available"
+	// AccountUserPending 用户挂起(冻结)账户,购买时由可用余额转入
 	AccountUserPending         = "user_pending"
+	// AccountMerchantPending 商户挂起账户
 	AccountMerchantPending     = "merchant_pending"
+	// AccountMerchantSettled 商户已结算账户
 	AccountMerchantSettled     = "merchant_settled"
+	// AccountPlatformFee 平台手续费账户
 	AccountPlatformFee         = "platform_fee"
+	// AccountReserveLiability 储备负债账户(平台对用户的负债)
 	AccountReserveLiability    = "reserve_liability"
+	// AccountRedemptionPending 赎回挂起账户
 	AccountRedemptionPending   = "redemption_pending"
+	// AccountMintPending 铸币挂起账户
 	AccountMintPending         = "mint_pending"
+	// AccountReserveAsset 储备资产账户
 	AccountReserveAsset        = "reserve_asset"
 )
 
 // Entry types used for transaction classification.
 const (
+	// EntryTypePurchaseHold 购买冻结:可用→挂起
 	EntryTypePurchaseHold    = "purchase_hold"
+	// EntryTypePurchaseSettle 购买结算:挂起→商户已结算
 	EntryTypePurchaseSettle  = "purchase_settle"
+	// EntryTypePurchaseRefund 购买退款:挂起→可用
 	EntryTypePurchaseRefund  = "purchase_refund"
+	// EntryTypeMintCredit 铸币入账:确认充值后为用户贷记 vUSDC
 	EntryTypeMintCredit      = "mint_credit"
+	// EntryTypeRedemptionDebit 赎回扣减:从用户可用余额扣除并锁定
 	EntryTypeRedemptionDebit  = "redemption_debit"
+	// EntryTypeRedemptionRelease 赎回释放:赎回失败时将锁定资金退回可用余额
 	EntryTypeRedemptionRelease = "redemption_release"
+	// EntryTypeFeeCollect 手续费收取
 	EntryTypeFeeCollect        = "fee_collect"
+	// EntryTypeDepositConfirm 充值确认
 	EntryTypeDepositConfirm    = "deposit_confirm"
 )
 
@@ -84,12 +104,24 @@ type WalletBalance struct {
 // ValidateBalance checks that total debits equal total credits in a list of entries.
 // This is a fundamental invariant of double-entry accounting.
 func ValidateBalance(entries []LedgerEntry) bool {
-	var totalDebit, totalCredit int64
+	// H-03 FIX: previous impl added AmountMinor to both totals → always true.
+	// Aggregate per-account net positions; global sum must be zero.
+	bal := map[string]int64{}
 	for _, e := range entries {
-		totalDebit += e.AmountMinor
-		totalCredit += e.AmountMinor
+		if e.AmountMinor <= 0 {
+			return false
+		}
+		if e.DebitAccount == "" || e.CreditAccount == "" {
+			return false
+		}
+		bal[e.DebitAccount] -= e.AmountMinor
+		bal[e.CreditAccount] += e.AmountMinor
 	}
-	return totalDebit == totalCredit
+	var sum int64
+	for _, v := range bal {
+		sum += v
+	}
+	return sum == 0
 }
 
 // PurchaseHold creates ledger entries for placing a purchase hold:

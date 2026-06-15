@@ -14,6 +14,34 @@
 
 const http = require('http');
 const crypto = require('crypto');
+const nacl = require('tweetnacl');
+const _bs58lib = require('bs58');
+const bs58 = _bs58lib.default || _bs58lib;
+
+// A-1/A-2 FIX: real EdDSA wallet-signature verification.
+// Solana wallet address = base58-encoded ed25519 public key.
+// signable_payload is signed by the wallet; verify before any state change.
+function buildSignableMessage(payload) {
+  // Canonical: stable key order matching prepare output
+  return 'ANCF_CHECKOUT:' + JSON.stringify(payload);
+}
+function verifyWalletSignature(wallet, payload, signatureB64) {
+  try {
+    if (!signatureB64 || signatureB64 === 'none' || signatureB64 === 'demo_signature_placeholder' || signatureB64 === 'demo_sig') {
+      return { ok: false, reason: 'missing or placeholder signature' };
+    }
+    const pubkey = bs58.decode(wallet);
+    if (pubkey.length !== 32) return { ok: false, reason: 'invalid wallet pubkey length' };
+    const msg = Buffer.from(buildSignableMessage(payload), 'utf8');
+    let sig;
+    try { sig = Buffer.from(signatureB64, 'base64'); } catch (e) { return { ok: false, reason: 'bad signature encoding' }; }
+    if (sig.length !== 64) return { ok: false, reason: 'invalid signature length' };
+    const valid = nacl.sign.detached.verify(new Uint8Array(msg), new Uint8Array(sig), new Uint8Array(pubkey));
+    return { ok: valid, reason: valid ? 'ok' : 'signature verification failed' };
+  } catch (e) {
+    return { ok: false, reason: 'verify error: ' + e.message };
+  }
+}
 
 const fs = require('fs');
 const path = require('path');
@@ -1114,13 +1142,26 @@ const server = http.createServer((req, res) => {
         if (!quote) return jsonResponse(res, 404, { code: 404, message: 'Quote not found' });
         if (intent.status !== 'prepared') return jsonResponse(res, 409, { code: 409, message: 'Intent already committed' });
 
-        // Mark consumed
+        const wallet = data.wallet || quote.wallet;
+        const signature = data.wallet_signature;
+
+        // A-3 FIX: wallet ownership binding
+        const boundWallet = intent.wallet || quote.wallet;
+        if (boundWallet && wallet !== boundWallet) {
+          return jsonResponse(res, 403, { code: 403, message: 'wallet does not match quote/intent owner' });
+        }
+
+        // A-1/A-2 FIX: verify EdDSA signature BEFORE state change
+        const sigCheck = verifyWalletSignature(wallet, intent.signable_payload, signature);
+        if (!sigCheck.ok) {
+          console.log('[Mock API] Checkout REJECTED: ' + sigCheck.reason + ' (wallet=' + wallet + ')');
+          return jsonResponse(res, 401, { code: 401, message: 'wallet signature verification failed: ' + sigCheck.reason });
+        }
+
         quote.consumed = true;
         intent.status = 'committed';
 
         const orderId = generateId('order_');
-        const wallet = data.wallet || quote.wallet;
-        const signature = data.wallet_signature || 'none';
 
         console.log(`[Mock API] Checkout committed: order=${orderId}, intent=${intentId}, sig=${signature.slice(0,16)}...`);
 
