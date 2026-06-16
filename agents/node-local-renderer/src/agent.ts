@@ -472,7 +472,7 @@ function buildCSPHeader(manifest: ANCFManifest, nonce: string): string {
         // Style: use nonce-based CSP for inline styles
         "style-src 'self' 'nonce-" + nonce + "'",
         // Connect: only the API gateway and agent bridge
-        `connect-src 'self' http://127.0.0.1:${AGENT_PORT} ${API_BASE}`,
+        "connect-src 'self'",
         // Images: self, data URIs, and allowed CDN hosts from manifest
         "img-src 'self' data:",
         // Fonts: self only
@@ -1070,9 +1070,18 @@ function buildTemplateOrchestrationScript(nonce: string): string {
       }
 
       function formatMinor(amountMinor, scale, currency) {
-        var divisor = Math.pow(10, Number(scale || 0));
-        var amount = Number(BigInt(String(amountMinor || '0'))) / divisor;
-        return amount.toFixed(Math.min(Number(scale || 0), 6)) + ' ' + (currency || '');
+        try {
+          var sc = Number(scale || 0);
+          var raw = String(amountMinor == null ? '0' : amountMinor);
+          if (!/^[0-9]+$/.test(raw)) return '— ' + (currency || '');
+          var big = BigInt(raw);
+          var divisor = BigInt(10) ** BigInt(sc);
+          var whole = big / divisor;
+          var frac = (big % divisor).toString().padStart(sc, '0').slice(0, Math.min(sc, 6));
+          return whole.toString() + (frac ? '.' + frac : '') + ' ' + (currency || '');
+        } catch (e) {
+          return '— ' + (currency || '');
+        }
       }
 
       function openDetail(product) {

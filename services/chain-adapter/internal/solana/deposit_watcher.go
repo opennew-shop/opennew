@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +45,7 @@ type SolanaDepositWatcher struct {
 	rpcURL           string
 	wsURL            string
 	reserveAddresses map[string]string // assetSymbol -> Solana public key
+	assetMints       map[string]string // assetSymbol -> expected SPL mint address (whitelist)
 	handler          DepositHandler
 	chainRepo        *repository.ChainRepository
 	pollInterval     time.Duration
@@ -86,6 +89,10 @@ func NewSolanaDepositWatcher(
 		rpcURL:           rpcURL,
 		wsURL:            wsURL,
 		reserveAddresses: reserveAddresses,
+		assetMints: map[string]string{
+			"USDC": USDCMainnetMint,
+			"vUSDC": USDCMainnetMint,
+		},
 		handler:          handler,
 		chainRepo:        chainRepo,
 		pollInterval:     10 * time.Second,
@@ -266,14 +273,19 @@ func (w *SolanaDepositWatcher) poll(ctx context.Context, rpcClient *RPCClient) {
 			}
 
 			// Decode SPL Token transfers targeting our reserve address.
-			event := w.decodeSPLTransfer(parsedTx, sig.Signature, reserveAddr, assetSymbol)
+			event := w.decodeSPLTransfer(parsedTx, sig.Signature, sig.Memo, reserveAddr, assetSymbol)
 			if event == nil {
 				continue
 			}
 
 			// Wait for minimum confirmations.
-			currentSlot, _ := rpcClient.GetSlot(ctx, w.commitment)
-			if currentSlot > 0 && (currentSlot - uint64(event.BlockNumber)) < w.minConfirmations {
+			currentSlot, slotErr := rpcClient.GetSlot(ctx, w.commitment)
+			// M-01 FIX: guard against unsigned underflow when currentSlot < BlockNumber
+			// (RPC node jitter/rollback). Underflow would wrap to ~2^64 and bypass minConfirmations.
+			if slotErr != nil || currentSlot == 0 || currentSlot < uint64(event.BlockNumber) {
+				continue // slot unavailable or anomalous — retry next poll
+			}
+			if (currentSlot - uint64(event.BlockNumber)) < w.minConfirmations {
 				w.logger.Debug("deposit tx has insufficient confirmations",
 					"sig", event.TxHash,
 					"slot", event.BlockNumber,
@@ -317,6 +329,7 @@ func (w *SolanaDepositWatcher) poll(ctx context.Context, rpcClient *RPCClient) {
 func (w *SolanaDepositWatcher) decodeSPLTransfer(
 	tx *ParsedTransaction,
 	txSig string,
+	memo *string,
 	reserveAddr string,
 	assetSymbol string,
 ) *model.DepositEvent {
@@ -351,6 +364,20 @@ func (w *SolanaDepositWatcher) decodeSPLTransfer(
 			_ = accountKeys // available for cross-referencing
 
 			if owner != reserveAddr {
+				continue
+			}
+
+			// S-01 FIX: validate token mint against whitelist — reject any non-USDC token.
+			// Without this, an attacker can deposit a worthless self-minted SPL token
+			// to the reserve address and have it credited as real vUSDC.
+			expectedMint, ok := w.assetMints[assetSymbol]
+			if !ok || expectedMint == "" {
+				w.logger.Warn("no mint whitelist configured for asset; rejecting", "asset", assetSymbol)
+				continue
+			}
+			if postBal.Mint != expectedMint {
+				w.logger.Warn("rejecting deposit: token mint not in whitelist",
+					"got_mint", postBal.Mint, "expected_mint", expectedMint, "asset", assetSymbol)
 				continue
 			}
 
@@ -406,19 +433,37 @@ func (w *SolanaDepositWatcher) decodeSPLTransfer(
 			}
 
 			return &model.DepositEvent{
-				Network:     string(model.NetworkSolanaMainnet),
-				TxHash:      txSig,
-				FromAddress: fromAddress,
-				ToAddress:   reserveAddr,
-				AmountMinor: int64(amount),
-				AssetSymbol: assetSymbol,
-				BlockNumber: int64(tx.Slot),
-				Timestamp:   eventTime,
+				Network:         string(model.NetworkSolanaMainnet),
+				TxHash:          txSig,
+				FromAddress:     fromAddress,
+				ToAddress:       reserveAddr,
+				AmountMinor:     int64(amount),
+				AssetSymbol:     assetSymbol,
+				DepositIntentID: parseDepositIntentMemo(memo, assetSymbol),
+				BlockNumber:     int64(tx.Slot),
+				Timestamp:       eventTime,
 			}
 		}
 	}
 
 	return nil
+}
+
+// parseDepositIntentMemo 从链上转账的 memo 字段解析 deposit_intent_id。
+// 约定格式为 "ancf-deposit:<assetSymbol>:di_xxx"，仅当三段格式、资产符号匹配
+// 且第三段以 "di_" 前缀开头时才返回该 ID，否则返回空串。
+func parseDepositIntentMemo(memo *string, assetSymbol string) string {
+	if memo == nil {
+		return ""
+	}
+	parts := strings.Split(*memo, ":")
+	if len(parts) != 3 || parts[0] != "ancf-deposit" || parts[1] != assetSymbol {
+		return ""
+	}
+	if !strings.HasPrefix(parts[2], "di_") {
+		return ""
+	}
+	return parts[2]
 }
 
 // processEvent persists the deposit event to the database and invokes the
@@ -445,8 +490,8 @@ func (w *SolanaDepositWatcher) processEvent(ctx context.Context, event *model.De
 		Network:       string(model.NetworkSolanaMainnet),
 		TxHash:        event.TxHash,
 		TxType:        model.TxTypeDeposit,
-		Status:        model.TxStatusConfirmed,
-		Confirmations: 1,
+		Status:        model.TxStatusFinalized,
+		Confirmations: int(w.minConfirmations),
 		RawJSON:       rawJSON,
 	}
 
@@ -459,8 +504,16 @@ func (w *SolanaDepositWatcher) processEvent(ctx context.Context, event *model.De
 		defer dbTx.Rollback()
 
 		if err := w.chainRepo.SaveChainTxWithTx(ctx, dbTx, chainTx); err != nil {
+			if errors.Is(err, repository.ErrDuplicateChainTx) {
+				return nil
+			}
 			w.logger.Error("failed to save chain tx (with tx)", "tx_hash", event.TxHash, "error", err)
 			return fmt.Errorf("solana watcher: save chain tx %s: %w", event.TxHash, err)
+		}
+
+		if err := w.chainRepo.IncrementReserveConfirmedWithTx(ctx, dbTx, event.Network, event.AssetSymbol, event.AmountMinor); err != nil {
+			w.logger.Error("failed to increment reserve balance", "tx_hash", event.TxHash, "error", err)
+			return fmt.Errorf("solana watcher: increment reserve %s: %w", event.TxHash, err)
 		}
 
 		outboxEvent := &repository.OutboxEvent{
@@ -519,22 +572,24 @@ func generateSolOutboxID(prefix string) string {
 // marshalOutboxPayload builds the JSON payload for a deposit_detected outbox event.
 func marshalOutboxPayload(event *model.DepositEvent) []byte {
 	type depositPayload struct {
-		Network     string `json:"network"`
-		TxHash      string `json:"tx_hash"`
-		FromAddress string `json:"from_address"`
-		ToAddress   string `json:"to_address"`
-		AmountMinor int64  `json:"amount_minor"`
-		AssetSymbol string `json:"asset_symbol"`
-		BlockNumber int64  `json:"block_number"`
+		Network         string `json:"network"`
+		TxHash          string `json:"tx_hash"`
+		FromAddress     string `json:"from_address"`
+		ToAddress       string `json:"to_address"`
+		AmountMinor     int64  `json:"amount_minor"`
+		AssetSymbol     string `json:"asset_symbol"`
+		DepositIntentID string `json:"deposit_intent_id,omitempty"`
+		BlockNumber     int64  `json:"block_number"`
 	}
 	data, err := json.Marshal(depositPayload{
-		Network:     event.Network,
-		TxHash:      event.TxHash,
-		FromAddress: event.FromAddress,
-		ToAddress:   event.ToAddress,
-		AmountMinor: event.AmountMinor,
-		AssetSymbol: event.AssetSymbol,
-		BlockNumber: event.BlockNumber,
+		Network:         event.Network,
+		TxHash:          event.TxHash,
+		FromAddress:     event.FromAddress,
+		ToAddress:       event.ToAddress,
+		AmountMinor:     event.AmountMinor,
+		AssetSymbol:     event.AssetSymbol,
+		DepositIntentID: event.DepositIntentID,
+		BlockNumber:     event.BlockNumber,
 	})
 	if err != nil {
 		return []byte("{}")

@@ -6,6 +6,10 @@ logs/
 .env.*
 !.env.example
 # Sensitive keys & wallets
+keys/
+*.pem
+*.key
+setup-admin.cjs
 payer.json
 .mock-state.json
 *.mock-state.json

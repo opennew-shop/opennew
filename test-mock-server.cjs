@@ -13,6 +13,35 @@
  */
 
 const http = require('http');
+const crypto = require('crypto');
+const nacl = require('tweetnacl');
+const _bs58lib = require('bs58');
+const bs58 = _bs58lib.default || _bs58lib;
+
+// A-1/A-2 FIX: real EdDSA wallet-signature verification.
+// Solana wallet address = base58-encoded ed25519 public key.
+// signable_payload is signed by the wallet; verify before any state change.
+function buildSignableMessage(payload) {
+  // Canonical: stable key order matching prepare output
+  return 'ANCF_CHECKOUT:' + JSON.stringify(payload);
+}
+function verifyWalletSignature(wallet, payload, signatureB64) {
+  try {
+    if (!signatureB64 || signatureB64 === 'none' || signatureB64 === 'demo_signature_placeholder' || signatureB64 === 'demo_sig') {
+      return { ok: false, reason: 'missing or placeholder signature' };
+    }
+    const pubkey = bs58.decode(wallet);
+    if (pubkey.length !== 32) return { ok: false, reason: 'invalid wallet pubkey length' };
+    const msg = Buffer.from(buildSignableMessage(payload), 'utf8');
+    let sig;
+    try { sig = Buffer.from(signatureB64, 'base64'); } catch (e) { return { ok: false, reason: 'bad signature encoding' }; }
+    if (sig.length !== 64) return { ok: false, reason: 'invalid signature length' };
+    const valid = nacl.sign.detached.verify(new Uint8Array(msg), new Uint8Array(sig), new Uint8Array(pubkey));
+    return { ok: valid, reason: valid ? 'ok' : 'signature verification failed' };
+  } catch (e) {
+    return { ok: false, reason: 'verify error: ' + e.message };
+  }
+}
 
 const fs = require('fs');
 const path = require('path');
@@ -529,7 +558,8 @@ function freezeFundsForDispute(orderId, disputeId, orderDetails) {
 function verifyAgentToken(req) {
   const token = req.headers['x-ancf-agent-token'];
   if (!token) return null;
-  const entry = AGENT_TOKENS[token];
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const entry = AGENT_TOKENS[tokenHash];
   if (!entry) return null;
   return { agent_id: entry.agent_id, agent_name: entry.name, permissions: entry.permissions };
 }
@@ -834,15 +864,16 @@ const server = http.createServer((req, res) => {
         if (!data.agent_name) return jsonResponse(res, 400, { code: 400, message: 'agent_name is required' });
         const agentType = data.agent_type || 'general';
 
-        // Generate JWT-style token: ancf_agent_{random32hex}
+        // Generate cryptographically secure token: ancf_agent_{64hex}
         const agentId = generateId('agent_');
-        const randomHex = generateId('').replace(/^[^_]+_?/, ''); // strip prefix, keep raw hex
-        const token = `ancf_agent_${randomHex}`;
+        const token = `ancf_agent_${crypto.randomBytes(32).toString('hex')}`;
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
         const now = new Date().toISOString();
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
 
-        AGENT_TOKENS[token] = {
+        // Store keyed by SHA-256 hash — plaintext token never persisted
+        AGENT_TOKENS[tokenHash] = {
           agent_id: agentId,
           name: data.agent_name,
           agent_type: agentType,
@@ -852,7 +883,7 @@ const server = http.createServer((req, res) => {
         };
         AGENT_PRODUCTS[agentId] = [];
 
-        console.log(`[Mock Auth] Agent registered: ${agentId} (${data.agent_name}), token=${token.slice(0,20)}...`);
+        console.log(`[Mock Auth] Agent registered: ${agentId} (${data.agent_name}), token_hash=${tokenHash.slice(0,12)}...`);
         return jsonResponse(res, 201, {
           agent_id: agentId,
           token: token,
@@ -1111,13 +1142,26 @@ const server = http.createServer((req, res) => {
         if (!quote) return jsonResponse(res, 404, { code: 404, message: 'Quote not found' });
         if (intent.status !== 'prepared') return jsonResponse(res, 409, { code: 409, message: 'Intent already committed' });
 
-        // Mark consumed
+        const wallet = data.wallet || quote.wallet;
+        const signature = data.wallet_signature;
+
+        // A-3 FIX: wallet ownership binding
+        const boundWallet = intent.wallet || quote.wallet;
+        if (boundWallet && wallet !== boundWallet) {
+          return jsonResponse(res, 403, { code: 403, message: 'wallet does not match quote/intent owner' });
+        }
+
+        // A-1/A-2 FIX: verify EdDSA signature BEFORE state change
+        const sigCheck = verifyWalletSignature(wallet, intent.signable_payload, signature);
+        if (!sigCheck.ok) {
+          console.log('[Mock API] Checkout REJECTED: ' + sigCheck.reason + ' (wallet=' + wallet + ')');
+          return jsonResponse(res, 401, { code: 401, message: 'wallet signature verification failed: ' + sigCheck.reason });
+        }
+
         quote.consumed = true;
         intent.status = 'committed';
 
         const orderId = generateId('order_');
-        const wallet = data.wallet || quote.wallet;
-        const signature = data.wallet_signature || 'none';
 
         console.log(`[Mock API] Checkout committed: order=${orderId}, intent=${intentId}, sig=${signature.slice(0,16)}...`);
 
@@ -2238,7 +2282,8 @@ const server = http.createServer((req, res) => {
     if (auth) {
       agentId = auth.agent_id;
     } else if (agentTokenParam) {
-      const entry = AGENT_TOKENS[agentTokenParam];
+      const paramHash = crypto.createHash('sha256').update(agentTokenParam).digest('hex');
+      const entry = AGENT_TOKENS[paramHash];
       if (entry) {
         agentId = entry.agent_id;
       }
