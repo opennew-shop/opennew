@@ -1,3 +1,5 @@
+// Package handler 实现 catalog 服务的 HTTP 处理层：商品搜索 / RAG 语义检索端点，
+// 以及 Agent 发起的商品增删改查端点。
 package handler
 
 import (

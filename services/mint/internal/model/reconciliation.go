@@ -9,6 +9,8 @@ import "time"
 //	total_internal_liability + pending_redemption <= confirmed_reserve_balance
 //
 // If Difference < 0 the invariant is violated and an alert is raised.
+// 中文说明：单次储备对账结果。Difference = 确认储备 -(内部负债 + 待赎回)，
+// 小于 0 表示储备不变式被破坏，IsBalanced=false 并触发告警。
 type ReconciliationResult struct {
 	AssetSymbol             string    `json:"asset_symbol"`
 	ReserveConfirmedBalance int64     `json:"reserve_confirmed_balance_minor"`

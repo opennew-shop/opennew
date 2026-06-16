@@ -29,6 +29,10 @@ import (
 //  - FOR UPDATE SKIP LOCKED prevents two instances from claiming the same event.
 //  - Heartbeat allows crash detection and automatic failover.
 //  - Idempotent handlers ensure at-least-once delivery is safe.
+//
+// 中文说明：多实例安全的 Outbox 处理器 V2。相比 V1 增加：实例唯一 ID、心跳存活信号、
+// 处理超时回收（卡在 processing 超时的事件重置为 pending 由他实例接管）、自愈恢复循环；
+// 配合 FOR UPDATE SKIP LOCKED 保证同一事件不被两个实例重复领取。
 type OutboxProcessorV2 struct {
 	instanceID  string
 	repo        *repository.OutboxRepository

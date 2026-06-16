@@ -10,6 +10,9 @@
 //
 // These utilities are designed to compose with the existing SolanaDepositWatcher
 // in deposit_watcher.go without duplicating its core polling/parsing logic.
+//
+// 中文说明：本文件为充值监听器提供生产级加固：DB 持久化游标(last_processed_slot)防重放、
+// 重启从游标+1 恢复、WebSocket 指数退避重连(上限 5 分钟)、单轮最多 50 签名批处理、健康检查集成。
 
 package solana
 

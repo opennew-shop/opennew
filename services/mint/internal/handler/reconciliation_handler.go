@@ -10,6 +10,7 @@ import (
 
 // ReconciliationHandler handles HTTP requests for reserve-vs-liability
 // reconciliation operations.
+// 储备对账操作的 HTTP 处理器（接入 ReconciliationService）。
 type ReconciliationHandler struct {
 	reconciliationService *service.ReconciliationService
 }

@@ -1,3 +1,5 @@
+// Package main 是账本服务(ledger)的入口,
+// 对外提供双分录账本的钱包余额与分录查询 HTTP 服务。
 package main
 
 import (
@@ -18,6 +20,8 @@ import (
 	"github.com/ancf-commerce/ancf/services/ledger/internal/service"
 )
 
+// main 启动账本服务:初始化结构化日志、连接 PostgreSQL、装配 repository/service/handler 三层,
+// 注册健康检查与钱包余额/分录查询路由,并监听信号实现优雅关闭。
 func main() {
 	// Structured JSON logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -56,7 +60,7 @@ func main() {
 
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(10)
-	db.SetConnLifetime(5 * time.Minute)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
 	// Wire up layers
 	ledgerRepo := repository.NewLedgerRepository(db)

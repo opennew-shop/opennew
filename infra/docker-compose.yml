@@ -52,6 +52,8 @@ services:
       API_PORT: "8080"
       LOG_LEVEL: info
       JWT_SECRET: change-me-in-production
+      API_KEY: change-me-in-production
+      INTERNAL_API_KEY: change-me-in-production
     depends_on:
       postgres:
         condition: service_healthy

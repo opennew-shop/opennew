@@ -1,3 +1,6 @@
+// Package main 是 ANCF 服务开通服务 (Provisioning Service) 的入口。
+// 它采用 Outbox 驱动：后台监听 order_committed 事件并异步开通算力租用等服务，
+// 同时注册管理端手动开通/状态查询与面向用户的访问凭据获取 HTTP 路由。
 package main
 
 import (
@@ -19,6 +22,8 @@ import (
 	"github.com/ancf-commerce/ancf/services/provisioning/internal/service"
 )
 
+// main 初始化日志、数据库连接池与各分层，启动后台 Outbox 监听协程，
+// 注册健康检查、管理端与 CLI 路由，并在收到中断信号时取消监听并优雅关闭 HTTP 服务。
 func main() {
 	// Structured JSON logger.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{

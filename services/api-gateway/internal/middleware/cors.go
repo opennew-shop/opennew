@@ -9,6 +9,7 @@ import (
 // CORS returns a Gin middleware that allows cross-origin requests from
 // Agent local renderer origins (127.0.0.1 and localhost).
 // In development, it allows all local origins. In production, restrict to specific hosts.
+// 中文说明：CORS 中间件，仅放行 Agent 本地渲染器来源(127.0.0.1/localhost)；生产环境应收紧到指定域名。
 func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")

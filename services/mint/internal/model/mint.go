@@ -1,3 +1,8 @@
+// Package model 定义 mint 服务的数据模型与状态机。
+// 包含 9 状态铸币状态机（MintRequest）、8 状态赎回状态机（RedemptionRecord）、
+// 影子账本 vUSDC/AGP 相关的储备账户（ReserveAccount）与铸币策略（MintPolicy），
+// 以及储备对账结果（ReconciliationResult，满足
+// total_liability + pending_redemption <= confirmed_reserve 不变式）。
 package model
 
 import (
@@ -113,11 +118,23 @@ type DepositIntentResponse struct {
 	Memo            string `json:"memo"`
 }
 
-// ConfirmDepositRequest is the request body for POST /api/v1/wallet/deposit-confirm.
+// ConfirmDepositRequest is the request body for POST /api/v1/internal/deposit-confirm.
 type ConfirmDepositRequest struct {
 	DepositIntentID string `json:"deposit_intent_id" binding:"required"`
 	DepositTxID     string `json:"deposit_tx_id" binding:"required"`
 	AmountMinor     int64  `json:"amount_minor" binding:"required,gt=0"`
+}
+
+// ChainDepositProof is the raw_json payload persisted by chain-adapter for a finalized deposit.
+type ChainDepositProof struct {
+	Network         string `json:"network"`
+	TxHash          string `json:"tx_hash"`
+	FromAddress     string `json:"from_address"`
+	ToAddress       string `json:"to_address"`
+	AmountMinor     int64  `json:"amount_minor"`
+	AssetSymbol     string `json:"asset_symbol"`
+	DepositIntentID string `json:"deposit_intent_id,omitempty"`
+	BlockNumber     int64  `json:"block_number"`
 }
 
 // MintStatusResponse is the response for GET /api/v1/wallet/mint-status.

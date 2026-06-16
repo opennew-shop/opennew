@@ -11,6 +11,7 @@ import (
 )
 
 // RedemptionRepository handles persistence for redemption_requests and reserve_account queries.
+// 赎回数据访问层：负责 redemption_requests 表持久化与 reserve_account 储备查询。
 type RedemptionRepository struct {
 	db *sql.DB
 }

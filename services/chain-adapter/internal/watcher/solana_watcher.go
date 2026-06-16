@@ -15,6 +15,9 @@ import (
 // Phase 3: The RPC integration is a skeleton. Specific calls (getSignaturesForAddress,
 // getTransaction, getParsedTransaction) are documented inline. The watcher is
 // wired up and can be driven by the simulate-deposit endpoint for development.
+//
+// 中文说明：DepositWatcher 的 Solana 实现，轮询 RPC 查询涉及储备地址的交易并解析 SPL Token(USDC) 转账。
+// Phase 3 阶段 RPC 集成为骨架，开发期可用 simulate-deposit 端点驱动。
 type SolanaDepositWatcher struct {
 	*DepositWatcher
 }

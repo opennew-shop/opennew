@@ -84,12 +84,15 @@ type ReserveInfo struct {
 	Address string `json:"address"`
 }
 
+// 各 Solana 环境的默认 RPC 端点。
 const (
 	defaultDevnetRPC  = "https://api.devnet.solana.com"
 	defaultTestnetRPC = "https://api.testnet.solana.com"
 	defaultMainnetRPC = "https://api.mainnet-beta.solana.com"
 )
 
+// main 解析命令行参数，派生多签 PDA 与 mint 地址，
+// 输出部署清单（JSON），并打印后续操作步骤。
 func main() {
 	rpcFlag := flag.String("rpc", "devnet",
 		"Solana RPC environment: devnet, testnet, mainnet, or a full URL")
@@ -280,6 +283,7 @@ func main() {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// resolveRPCURL 将 --rpc 参数（devnet/testnet/mainnet 或完整 URL）解析为实际 RPC 端点。
 func resolveRPCURL(flag string) string {
 	switch flag {
 	case "devnet":
@@ -293,6 +297,7 @@ func resolveRPCURL(flag string) string {
 	}
 }
 
+// resolveNetwork 将 --rpc 参数映射为对应的网络标识（如 solana-mainnet）。
 func resolveNetwork(flag string) string {
 	switch flag {
 	case "devnet":
@@ -306,6 +311,8 @@ func resolveNetwork(flag string) string {
 	}
 }
 
+// loadKeypair 从 JSON 文件读取 Solana 密钥对（[u8; 64] 数组），
+// 拆分出后 32 字节公钥与前 32 字节私钥并以十六进制返回。
 func loadKeypair(path string) (*solana.Signer, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -329,18 +336,22 @@ func loadKeypair(path string) (*solana.Signer, error) {
 	}, nil
 }
 
+// deriveMultisigPDA 由 3 个签名者公钥与阈值 2 确定性派生 2-of-3 多签 PDA 地址。
 func deriveMultisigPDA(signers [3]string) string {
 	payload := fmt.Sprintf("multisig|%s|%s|%s|2", signers[0], signers[1], signers[2])
 	hash := sha256.Sum256([]byte(payload))
 	return fmt.Sprintf("MULTISIG_PDA_%x", hash[:20])
 }
 
+// deriveMintAddress 由多签 PDA 确定性派生 vUSDC mint 地址。
 func deriveMintAddress(multisigPDA string) string {
 	payload := fmt.Sprintf("vusdc_mint|%s", multisigPDA)
 	hash := sha256.Sum256([]byte(payload))
 	return fmt.Sprintf("VUSDC_MINT_%x", hash[:20])
 }
 
+// generateWarnings 根据是否 dry-run、是否使用占位签名者及 PDA 是否为空，
+// 生成部署前的告警提示列表。
 func generateWarnings(dryRun bool, signers [3]string, pda string) []string {
 	var warnings []string
 	if dryRun {
@@ -362,6 +373,7 @@ func generateWarnings(dryRun bool, signers [3]string, pda string) []string {
 	return warnings
 }
 
+// parseSignerFiles 将逗号分隔的签名者密钥文件路径拆分为去空白后的切片。
 func parseSignerFiles(s string) []string {
 	if s == "" {
 		return nil
@@ -377,6 +389,7 @@ func parseSignerFiles(s string) []string {
 	return result
 }
 
+// printEnvConfig 以环境变量形式打印 vUSDC 对账器配置，便于写入 .env 文件。
 func printEnvConfig(rpcURL string, network string) {
 	fmt.Println("# ANCF vUSDC Token-2022 Configuration")
 	fmt.Println("# Add these to your chain-adapter .env file")

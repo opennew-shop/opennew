@@ -222,7 +222,7 @@ CREATE TABLE mint_requests (
     wallet VARCHAR(88) NOT NULL,
     asset_id BIGINT NOT NULL REFERENCES assets(id) ON DELETE RESTRICT,
     reserve_deposit_tx_id VARCHAR(200),
-    amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+    amount_minor BIGINT NOT NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'created'
         CHECK (status IN (
             'created', 'deposit_confirmed', 'risk_checking',
@@ -233,12 +233,19 @@ CREATE TABLE mint_requests (
     approval_id VARCHAR(100),
     chain_mint_tx_id VARCHAR(200),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (
+        amount_minor > 0
+        OR (amount_minor = 0 AND status IN ('created', 'failed', 'cancelled'))
+    )
 );
 
 CREATE INDEX idx_mint_requests_wallet ON mint_requests(wallet);
 CREATE INDEX idx_mint_requests_status ON mint_requests(status);
 CREATE INDEX idx_mint_requests_asset ON mint_requests(asset_id);
+CREATE UNIQUE INDEX idx_mint_requests_reserve_deposit_tx_id_unique
+    ON mint_requests(reserve_deposit_tx_id)
+    WHERE reserve_deposit_tx_id IS NOT NULL;
 
 -- ----------------------------------------------------------------------------
 -- 10. redemption_requests - Redemption request lifecycle tracking
@@ -283,6 +290,7 @@ CREATE TABLE chain_txs (
 );
 
 CREATE INDEX idx_chain_txs_tx_hash ON chain_txs(tx_hash);
+CREATE UNIQUE INDEX idx_chain_txs_network_tx_hash_unique ON chain_txs(network, tx_hash);
 CREATE INDEX idx_chain_txs_network_status ON chain_txs(network, status);
 CREATE INDEX idx_chain_txs_type ON chain_txs(tx_type);
 

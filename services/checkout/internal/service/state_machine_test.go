@@ -8,6 +8,7 @@ import (
 
 // TestOrderStateMachine tests all legal and illegal state transitions
 // for the checkout order state machine.
+// 验证 8 状态订单状态机的全部合法与非法流转（含跳状态、回退、终态及自环）。
 //
 // State flow:
 //
@@ -77,6 +78,7 @@ func TestOrderStateMachine(t *testing.T) {
 }
 
 // TestIsTerminal verifies that completed and refunded are the only terminal states.
+// 验证仅 completed 与 refunded 为终态，未知状态不视为终态。
 func TestIsTerminal(t *testing.T) {
 	terminalStates := []string{model.StatusCompleted, model.StatusRefunded}
 	nonTerminalStates := []string{
@@ -112,6 +114,7 @@ func TestIsTerminal(t *testing.T) {
 }
 
 // TestCanTransitionTo is a convenience test for the boolean helper.
+// 验证布尔便捷函数 CanTransitionTo 对合法/非法流转返回正确结果。
 func TestCanTransitionTo(t *testing.T) {
 	if !CanTransitionTo(model.StatusCreated, model.StatusPrepared) {
 		t.Error("created -> prepared should be allowed")
@@ -128,6 +131,7 @@ func TestCanTransitionTo(t *testing.T) {
 }
 
 // TestValidateTransitionUnknownStatus verifies error handling for unknown statuses.
+// 验证源状态或目标状态未知时 ValidateTransition 返回错误。
 func TestValidateTransitionUnknownStatus(t *testing.T) {
 	err := ValidateTransition("bogus_status", model.StatusPrepared)
 	if err == nil {

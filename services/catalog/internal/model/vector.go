@@ -12,6 +12,9 @@ import (
 //
 // pgvector stores vectors as a string representation: [0.1,0.2,0.3,...]
 // This type handles serialization/deserialization transparently.
+//
+// 中文说明：pgvector 向量类型的 Go 映射([]float32)，实现 sql.Scanner/driver.Valuer，
+// 透明完成数据库 [0.1,0.2,...] 字符串表示与 Go 切片之间的序列化/反序列化。
 type Vector []float32
 
 // Scan implements sql.Scanner. It reads the pgvector string representation

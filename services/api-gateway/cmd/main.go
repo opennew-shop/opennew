@@ -1,3 +1,7 @@
+// Package main 是 ANCF API 网关服务的入口。
+// 负责加载配置、连接 PostgreSQL 与 Redis、装配 Gin 路由与全局中间件链
+// （日志、CORS、鉴权、限流、Schema 校验、HTTP 签名），并将业务端点反向代理到
+// 后端服务（开发期为 mock 服务），同时启动 HTTP 服务并支持优雅关闭。
 package main
 
 import (
@@ -38,6 +42,8 @@ import (
 //	))
 const MOCK_BASE = "http://127.0.0.1:9080"
 
+// main 启动 API 网关：加载配置、初始化日志、连接数据库与 Redis、
+// 装配路由与中间件链，随后监听端口并在收到终止信号时优雅关闭。
 func main() {
 	cfg := config.Load()
 
@@ -192,7 +198,6 @@ func main() {
 	wallet.GET("/balance", handlers.ReverseProxy(MOCK_BASE+"/api/v1/wallet/balance"))
 	wallet.POST("/deposit-intents", handlers.ReverseProxy(MOCK_BASE+"/api/v1/wallet/deposit-intents"))
 	wallet.POST("/redeem", handlers.ReverseProxy(MOCK_BASE+"/api/v1/wallet/redeem"))
-	wallet.POST("/deposit-confirm", handlers.ReverseProxy(MOCK_BASE+"/api/v1/wallet/deposit-confirm"))
 	wallet.GET("/mint-status", handlers.ReverseProxy(MOCK_BASE+"/api/v1/wallet/mint-status"))
 	wallet.GET("/redeem-status", handlers.ReverseProxy(MOCK_BASE+"/api/v1/wallet/redeem-status"))
 	wallet.GET("/reserve-info", handlers.ReverseProxy(MOCK_BASE+"/api/v1/wallet/reserve-info"))

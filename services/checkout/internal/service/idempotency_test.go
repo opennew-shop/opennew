@@ -8,6 +8,7 @@ import (
 //   - Consistent output for identical input
 //   - Different output for different input
 //   - Non-empty output for empty input
+// 验证：相同输入哈希一致、不同输入哈希不同、空输入仍产出非空哈希。
 func TestComputeBodyHash(t *testing.T) {
 	// Same body must produce same hash.
 	t.Run("consistent hash for identical bodies", func(t *testing.T) {
@@ -80,6 +81,7 @@ func TestComputeBodyHash(t *testing.T) {
 }
 
 // TestComputeBodyHashRaw verifies the raw-byte variant of ComputeBodyHash.
+// 验证 ComputeBodyHashRaw（原始字节版）：相同字节哈希一致、不同字节哈希不同且非空。
 func TestComputeBodyHashRaw(t *testing.T) {
 	raw1 := []byte(`{"order_intent_id":"intent_abc","quote_id":"quote_xyz"}`)
 	raw2 := []byte(`{"order_intent_id":"intent_abc","quote_id":"quote_xyz"}`)
@@ -101,6 +103,7 @@ func TestComputeBodyHashRaw(t *testing.T) {
 }
 
 // TestIdempotencyResultConstants verifies the idempotency result enum values.
+// 验证幂等结果枚举取值：New=0、Replay=1、Conflict=2。
 func TestIdempotencyResultConstants(t *testing.T) {
 	// Verify that IdempotencyNew is the zero value (iot = 0).
 	if IdempotencyNew != 0 {
@@ -116,6 +119,7 @@ func TestIdempotencyResultConstants(t *testing.T) {
 
 // TestIdempotencyReplayAndConflict documents the expected behavior of
 // CheckAndResolveIdempotency (requires database).
+// 说明 CheckAndResolveIdempotency 的预期行为（回放/冲突/新建），实际逻辑由集成测试覆盖。
 // The actual implementation is tested via integration tests.
 func TestIdempotencyReplayAndConflict(t *testing.T) {
 	t.Run("idempotency replay returns cached response", func(t *testing.T) {

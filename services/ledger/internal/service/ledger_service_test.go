@@ -8,23 +8,27 @@ import (
 
 // TestLedgerService_HasSufficientBalance requires a database connection
 // and an active transaction with advisory locking.
+// 验证带咨询锁的事务内余额充足性检查(需数据库,故跳过)。
 func TestLedgerService_HasSufficientBalance(t *testing.T) {
 	t.Skip("requires database connection - run with -tags=integration")
 }
 
 // TestLedgerService_InsufficientBalance documents the expected behavior
 // when a wallet has insufficient funds.
+// 验证钱包余额不足时的预期行为(需数据库,故跳过)。
 func TestLedgerService_InsufficientBalance(t *testing.T) {
 	t.Skip("requires database connection - run with -tags=integration")
 }
 
 // TestPurchaseHold_Validation tests input validation for the PurchaseHold method.
+// 验证 PurchaseHold 方法的入参校验(需数据库与事务,故跳过)。
 func TestPurchaseHold_Validation(t *testing.T) {
 	t.Skip("requires database connection and transaction - run with -tags=integration")
 }
 
 // TestLedgerEntryValidation tests the double-entry accounting invariants
 // on the model layer (no database required).
+// 验证 model 层双分录不变量:借贷平衡及各分录构造器生成的借/贷科目正确。
 func TestLedgerEntryValidation(t *testing.T) {
 	t.Run("valid single entry pair balances", func(t *testing.T) {
 		entries := []model.LedgerEntry{
@@ -173,6 +177,7 @@ func TestLedgerEntryValidation(t *testing.T) {
 }
 
 // TestWalletBalanceModel verifies the WalletBalance struct invariants.
+// 验证 WalletBalance 结构体字段赋值与可用余额非负等不变量。
 func TestWalletBalanceModel(t *testing.T) {
 	balance := model.WalletBalance{
 		Wallet:      "wallet_01JTEST",
@@ -194,6 +199,7 @@ func TestWalletBalanceModel(t *testing.T) {
 }
 
 // TestAccountTypes verifies all expected account types are defined.
+// 验证所有预期的账户类型常量均已定义且取值与名称一致。
 func TestAccountTypes(t *testing.T) {
 	expectedAccounts := map[string]string{
 		"user_available":     model.AccountUserAvailable,

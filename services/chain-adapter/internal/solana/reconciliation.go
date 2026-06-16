@@ -36,6 +36,7 @@ import (
 // LedgerRepository provides the subset of ledger queries needed for
 // supply reconciliation. The actual implementation lives in the ledger
 // service; this interface is defined here to avoid circular imports.
+// 中文说明：供应量对账所需的账本查询子集接口；真正实现位于 ledger 服务，此处定义以避免循环依赖。
 type LedgerRepository struct {
 	db *sql.DB
 }

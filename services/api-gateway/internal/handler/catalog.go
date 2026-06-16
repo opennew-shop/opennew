@@ -11,6 +11,7 @@ import (
 
 // CatalogSearchHandler exposes the catalog search endpoint from the API gateway.
 // It wraps the catalog service's search handler and optionally supports hybrid search.
+// 网关侧商品搜索处理器：包装 catalog 服务的搜索逻辑，可选支持混合检索(hybrid)。
 type CatalogSearchHandler struct {
 	searchHandler interface {
 		Search(c *gin.Context)

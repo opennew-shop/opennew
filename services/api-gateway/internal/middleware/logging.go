@@ -11,6 +11,7 @@ import (
 )
 
 // generateRequestID creates a short random request ID.
+// 生成短随机请求 ID（crypto/rand 失败时回退为时间戳）。
 func generateRequestID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {

@@ -433,6 +433,7 @@ func simplePatternMatch(pattern, value string) bool {
 	return true // permissive fallback
 }
 
+// joinPath 用点号拼接字段路径，base 为空时直接返回 field，用于定位校验错误的字段位置。
 func joinPath(base, field string) string {
 	if base == "" {
 		return field

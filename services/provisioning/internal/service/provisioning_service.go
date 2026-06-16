@@ -1,3 +1,7 @@
+// Package service 提供服务开通的业务逻辑，
+// 监听 order_committed 事件并异步开通算力租用等服务，
+// 成功时记账 purchase_settle、失败时记账 purchase_refund 退款，
+// 全程以 Outbox 事件与不可变审计日志记录状态流转。
 package service
 
 import (

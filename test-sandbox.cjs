@@ -14,6 +14,8 @@
 const http = require('http');
 
 const BASE = 'http://127.0.0.1:8080';
+const INTERNAL_BASE = process.env.MINT_SERVICE_URL || BASE;
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'change-me-in-production';
 const TIMEOUT = 10000;
 
 // ---- HTTP Helpers ----
@@ -52,6 +54,9 @@ function httpRequest(method, path, body, headers) {
 
 function get(path, headers) { return httpRequest('GET', path, null, headers); }
 function post(path, body, headers) { return httpRequest('POST', path, body, headers); }
+function internalPost(path, body) {
+  return httpRequest('POST', new URL(path, INTERNAL_BASE).toString(), body, { 'X-Internal-API-Key': INTERNAL_API_KEY });
+}
 
 function generateId() {
   const hex = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
@@ -260,7 +265,7 @@ async function main() {
     console.log(`  [INFO] Deposit intent created: ${state.depositIntentId}`);
 
     // 4b. Confirm deposit
-    const confirmRes = await post('/api/v1/wallet/deposit-confirm', {
+    const confirmRes = await internalPost('/api/v1/internal/deposit-confirm', {
       deposit_intent_id: state.depositIntentId,
       deposit_tx_id: 'sandbox_tx_' + generateId().slice(0, 16),
       amount_minor: '50000000'

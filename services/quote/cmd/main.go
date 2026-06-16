@@ -1,3 +1,5 @@
+// Package main 是报价服务(quote)的入口,
+// 提供 5 分钟 TTL 的服务端权威报价 HTTP 服务。
 package main
 
 import (
@@ -19,6 +21,8 @@ import (
 	"github.com/ancf-commerce/ancf/services/quote/internal/service"
 )
 
+// main 启动报价服务:读取环境配置、连接 PostgreSQL、装配报价与 SKU 依赖,
+// 注册健康检查与报价生成路由,并监听信号实现优雅关闭。
 func main() {
 	// Read configuration from environment variables.
 	databaseURL := os.Getenv("DATABASE_URL")

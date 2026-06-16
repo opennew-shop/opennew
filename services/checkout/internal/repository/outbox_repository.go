@@ -14,6 +14,9 @@ import (
 // Events are inserted within the same database transaction as the business
 // operation (checkout commit). A separate outbox processor polls for pending
 // events and publishes them to Redis Streams.
+//
+// 中文说明：outbox 表中的单条事件，与业务操作（checkout commit）在同一事务内写入，
+// 由独立的 outbox 处理器轮询后发布到 Redis Streams，实现事务性 Outbox 可靠投递。
 type OutboxEvent struct {
 	ID            int64           `json:"id"`
 	EventID       string          `json:"event_id"`
@@ -53,6 +56,8 @@ func (r *OutboxRepository) InsertWithTx(ctx context.Context, tx *sql.Tx, event *
 // FetchPending retrieves pending outbox events for processing, ordered by creation time.
 // Uses FOR UPDATE SKIP LOCKED to allow multiple concurrent processor instances without blocking.
 // limit controls the maximum number of events returned per batch.
+//
+// 中文说明：以 FOR UPDATE SKIP LOCKED 批量拉取 pending 事件，支持多实例并发处理且互不阻塞。
 func (r *OutboxRepository) FetchPending(ctx context.Context, limit int) ([]OutboxEvent, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, event_id, event_type, aggregate_type, aggregate_id, payload, status, created_at

@@ -10,6 +10,7 @@ import (
 )
 
 // RedemptionHandler handles HTTP requests for vUSDC redemption operations.
+// vUSDC/AGP 赎回操作的 HTTP 处理器（8 状态赎回流程的接入层）。
 type RedemptionHandler struct {
 	redemptionService *service.RedemptionService
 }
@@ -102,7 +103,7 @@ func (h *RedemptionHandler) CreateRedemption(c *gin.Context) {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/wallet/redeem/:request_id/process  (internal)
+// POST /api/v1/internal/redeem/:request_id/process
 // ---------------------------------------------------------------------------
 
 // ProcessRedemption handles the redemption processing workflow.
@@ -196,7 +197,7 @@ func (h *RedemptionHandler) GetRedemptionStatus(c *gin.Context) {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/wallet/redeem/:request_id/payout  (internal)
+// POST /api/v1/internal/redeem/:request_id/payout
 // ---------------------------------------------------------------------------
 
 // CompletePayout marks the payout as completed.
@@ -270,7 +271,7 @@ func (h *RedemptionHandler) CompletePayout(c *gin.Context) {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/wallet/redeem/:request_id/release  (internal)
+// POST /api/v1/internal/redeem/:request_id/release
 // ---------------------------------------------------------------------------
 
 // ReleaseFunds handles the release of locked funds for a failed redemption.

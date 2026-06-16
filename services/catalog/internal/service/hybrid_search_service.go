@@ -11,6 +11,7 @@ import (
 )
 
 // SearchMode defines the search strategy.
+// 检索模式：hybrid(RRF 融合关键词+向量) / keyword(仅全文) / vector(仅向量)。
 type SearchMode string
 
 const (

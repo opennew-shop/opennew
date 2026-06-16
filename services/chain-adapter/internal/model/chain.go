@@ -1,3 +1,6 @@
+// Package model 定义 chain-adapter（Solana 链适配器）服务的核心领域模型：
+// 区块链网络枚举、链上交易记录（chain_txs）、充值事件（DepositEvent）
+// 以及平台储备账户（reserve_accounts），供各层共享使用。
 package model
 
 import (
@@ -60,14 +63,15 @@ const (
 // This is the canonical event that the chain adapter emits to downstream
 // services (mint-service) when a user deposit is detected.
 type DepositEvent struct {
-	Network     string    `json:"network"`
-	TxHash      string    `json:"tx_hash"`
-	FromAddress string    `json:"from_address"`
-	ToAddress   string    `json:"to_address"` // reserve_address
-	AmountMinor int64     `json:"amount_minor"`
-	AssetSymbol string    `json:"asset_symbol"` // e.g. "USDC"
-	BlockNumber int64     `json:"block_number"`
-	Timestamp   time.Time `json:"timestamp"`
+	Network         string    `json:"network"`
+	TxHash          string    `json:"tx_hash"`
+	FromAddress     string    `json:"from_address"`
+	ToAddress       string    `json:"to_address"` // reserve_address
+	AmountMinor     int64     `json:"amount_minor"`
+	AssetSymbol     string    `json:"asset_symbol"` // e.g. "USDC"
+	DepositIntentID string    `json:"deposit_intent_id,omitempty"`
+	BlockNumber     int64     `json:"block_number"`
+	Timestamp       time.Time `json:"timestamp"`
 }
 
 // ReserveAccount represents a platform-controlled reserve wallet for a

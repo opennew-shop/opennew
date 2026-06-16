@@ -1,3 +1,6 @@
+// Package main 是 checkout 结算服务的程序入口。
+// 负责加载环境配置、建立 PostgreSQL 连接池、装配依赖（订单/报价/SKU/Outbox 仓储与结算服务），
+// 注册 prepare/commit HTTP 路由，并以优雅关闭方式启动 Gin 服务。
 package main
 
 import (
@@ -21,6 +24,8 @@ import (
 	quoteSvc "github.com/ancf-commerce/ancf/services/quote/internal/service"
 )
 
+// main 启动 checkout 服务：读取环境配置、连接并校验 PostgreSQL、配置连接池、
+// 装配依赖、注册路由，并监听 SIGINT/SIGTERM 实现优雅关闭。
 func main() {
 	// Read configuration from environment variables.
 	databaseURL := os.Getenv("DATABASE_URL")
@@ -64,6 +69,7 @@ func main() {
 	db.SetConnMaxLifetime(5 * time.Minute)
 
 	// Wire dependencies.
+	// 依赖装配链：订单/报价/SKU/Outbox 仓储 → 报价服务 → 结算服务 → HTTP 处理器。
 	orderRepo := repository.NewOrderRepository(db)
 	qRepo := quoteRepo.NewQuoteRepository(db)
 	skuRepo := catalogRepo.NewSKURepository(db)

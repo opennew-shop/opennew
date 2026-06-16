@@ -1,3 +1,5 @@
+// Package config 负责从环境变量加载 API 网关的运行配置，
+// 并为缺省值提供解析辅助函数。缺失关键密钥（JWT_SECRET、API_KEY）时会直接终止启动。
 package config
 
 import (
@@ -61,6 +63,7 @@ func Load() *Config {
 	return cfg
 }
 
+// envOrDefault 返回环境变量 key 的值，未设置或为空时返回 defaultVal。
 func envOrDefault(key, defaultVal string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -68,6 +71,7 @@ func envOrDefault(key, defaultVal string) string {
 	return defaultVal
 }
 
+// envBoolOrDefault 读取布尔型环境变量，未设置或解析失败时返回 defaultVal。
 func envBoolOrDefault(key string, defaultVal bool) bool {
 	v := os.Getenv(key)
 	if v == "" {
@@ -80,6 +84,7 @@ func envBoolOrDefault(key string, defaultVal bool) bool {
 	return b
 }
 
+// envIntOrDefault 读取整型环境变量，未设置或解析失败时返回 defaultVal。
 func envIntOrDefault(key string, defaultVal int) int {
 	v := os.Getenv(key)
 	if v == "" {
@@ -92,6 +97,7 @@ func envIntOrDefault(key string, defaultVal int) int {
 	return i
 }
 
+// envFloatOrDefault 读取浮点型环境变量，未设置或解析失败时返回 defaultVal。
 func envFloatOrDefault(key string, defaultVal float64) float64 {
 	v := os.Getenv(key)
 	if v == "" {

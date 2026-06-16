@@ -1,3 +1,6 @@
+// Package model 定义服务开通的数据模型与常量：
+// 服务类型 (算力租用/存储分配/API Key 签发)、开通状态、开通结果与请求，
+// 以及监听/发出的 Outbox 事件类型和审计事件类型。
 package model
 
 import (

@@ -13,6 +13,7 @@ var startTime = time.Now()
 // HealthCheck returns a Gin handler for the GET /health endpoint.
 // Returns service health status including version, uptime, and component checks.
 // No authentication required.
+// 健康检查处理器：返回服务版本、运行时长与组件状态，对应 GET /health，无需鉴权。
 func HealthCheck() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uptimeSeconds := int64(time.Since(startTime).Seconds())

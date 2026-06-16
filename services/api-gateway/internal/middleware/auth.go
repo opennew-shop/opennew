@@ -1,3 +1,5 @@
+// Package middleware 实现 API 网关的中间件链：请求日志、CORS、鉴权、限流、
+// Schema 校验与 HTTP 消息签名（RFC 9421）等。
 package middleware
 
 import (

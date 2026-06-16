@@ -1,3 +1,6 @@
+// Package handler 实现 mint 服务的 HTTP 处理器层。
+// 它将钱包侧的铸币/赎回请求、服务间内部接口以及管理端储备对账请求
+// 解析并校验后委派给 service 层，再把结果或错误编码为统一的 JSON 响应。
 package handler
 
 import (
@@ -95,7 +98,7 @@ func (h *MintHandler) CreateDepositIntent(c *gin.Context) {
 	})
 }
 
-// ConfirmDeposit handles POST /api/v1/wallet/deposit-confirm
+// ConfirmDeposit handles POST /api/v1/internal/deposit-confirm
 //
 // This endpoint is intended for internal use by the chain-adapter or admin.
 // It confirms a deposit has been observed on-chain and triggers the mint/credit flow.

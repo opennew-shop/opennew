@@ -26,6 +26,8 @@ import (
 //
 // The PDA (Program Derived Address) is the address of the multisig vault
 // account that holds the mint authority for the vUSDC Token-2022 mint.
+// 中文说明：2-of-3 多签配置。Threshold 固定为 2，Signers 为 3 个 base58 公钥，
+// PDA 为持有 vUSDC Token-2022 铸币权限的多签金库程序派生地址。
 type MultisigConfig struct {
 	Threshold uint8    `json:"threshold"` // Fixed at 2 for 2-of-3
 	Signers   [3]string `json:"signers"`  // 3 public key addresses (base58)

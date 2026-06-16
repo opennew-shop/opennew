@@ -15,6 +15,7 @@
 const http = require('http');
 
 const PORT = 8080;
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'change-me-in-production';
 
 // ---- Seed data ----
 const SKUS = [
@@ -115,6 +116,7 @@ const reserveAccounts = {
     pending_balance_minor: '0',
     last_reconciled_at: null
   }
+};
 
 // ---- Dispute DAO & Sanction Committee Stores (SUB-030) ----
 const DISPUTES = {};           // dispute_id → {order_id, filed_by, against, reason, evidence, status, votes, verdict, escrow_frozen_minor, created_at, resolved_at}
@@ -162,6 +164,7 @@ function jsonResponse(res, status, data) {
 function generateId(prefix) {
   const hex = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
   return `${prefix}${hex}`;
+}
 
 // ---- Dispute DAO Helpers (SUB-030) ----
 
@@ -495,11 +498,11 @@ const manifest = {
       requires_wallet_signature: true
     },
     deposit_intent: { endpoint: '/api/v1/wallet/deposit-intents', method: 'POST' },
-    deposit_confirm: { endpoint: '/api/v1/wallet/deposit-confirm', method: 'POST', internal: true },
+    deposit_confirm: { endpoint: '/api/v1/internal/deposit-confirm', method: 'POST', internal: true },
     redeem: { endpoint: '/api/v1/wallet/redeem', method: 'POST' },
-    redeem_process: { endpoint: '/api/v1/wallet/redeem/:request_id/process', method: 'POST', internal: true },
-    redeem_payout: { endpoint: '/api/v1/wallet/redeem/:request_id/payout', method: 'POST', internal: true },
-    redeem_release: { endpoint: '/api/v1/wallet/redeem/:request_id/release', method: 'POST', internal: true },
+    redeem_process: { endpoint: '/api/v1/internal/redeem/:request_id/process', method: 'POST', internal: true },
+    redeem_payout: { endpoint: '/api/v1/internal/redeem/:request_id/payout', method: 'POST', internal: true },
+    redeem_release: { endpoint: '/api/v1/internal/redeem/:request_id/release', method: 'POST', internal: true },
     mint_status: { endpoint: '/api/v1/wallet/mint-status', method: 'GET' },
     redeem_status: { endpoint: '/api/v1/wallet/redeem-status', method: 'GET' },
     reserve_info: { endpoint: '/api/v1/wallet/reserve-info', method: 'GET' },
@@ -968,8 +971,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ---- POST /api/v1/wallet/deposit-confirm (internal: simulates deposit arrival) ----
-  if (method === 'POST' && path === '/api/v1/wallet/deposit-confirm') {
+  // ---- POST /api/v1/internal/deposit-confirm (internal: simulates deposit arrival) ----
+  if (method === 'POST' && path === '/api/v1/internal/deposit-confirm') {
+    if (req.headers['x-internal-api-key'] !== INTERNAL_API_KEY) {
+      return jsonResponse(res, 401, { code: 401, message: 'missing or invalid internal API key' });
+    }
+
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
@@ -1058,10 +1065,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ---- POST /api/v1/wallet/redeem/:request_id/process ----
+  // ---- POST /api/v1/internal/redeem/:request_id/process ----
   if (method === 'POST') {
-    const processMatch = path.match(/^\/api\/v1\/wallet\/redeem\/(red_[a-f0-9]+)\/process$/);
+    const processMatch = path.match(/^\/api\/v1\/internal\/redeem\/(red_[a-f0-9]+)\/process$/);
     if (processMatch) {
+      if (req.headers['x-internal-api-key'] !== INTERNAL_API_KEY) {
+        return jsonResponse(res, 401, { code: 401, message: 'missing or invalid internal API key' });
+      }
+
       const requestID = processMatch[1];
       const redeem = redemptionRequests[requestID];
       if (!redeem) {
@@ -1141,10 +1152,14 @@ const server = http.createServer((req, res) => {
     return jsonResponse(res, 200, redeem);
   }
 
-  // ---- POST /api/v1/wallet/redeem/:request_id/payout ----
+  // ---- POST /api/v1/internal/redeem/:request_id/payout ----
   if (method === 'POST') {
-    const payoutMatch = path.match(/^\/api\/v1\/wallet\/redeem\/(red_[a-f0-9]+)\/payout$/);
+    const payoutMatch = path.match(/^\/api\/v1\/internal\/redeem\/(red_[a-f0-9]+)\/payout$/);
     if (payoutMatch) {
+      if (req.headers['x-internal-api-key'] !== INTERNAL_API_KEY) {
+        return jsonResponse(res, 401, { code: 401, message: 'missing or invalid internal API key' });
+      }
+
       const requestID = payoutMatch[1];
       const redeem = redemptionRequests[requestID];
       if (!redeem) {
@@ -1176,10 +1191,14 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  // ---- POST /api/v1/wallet/redeem/:request_id/release ----
+  // ---- POST /api/v1/internal/redeem/:request_id/release ----
   if (method === 'POST') {
-    const releaseMatch = path.match(/^\/api\/v1\/wallet\/redeem\/(red_[a-f0-9]+)\/release$/);
+    const releaseMatch = path.match(/^\/api\/v1\/internal\/redeem\/(red_[a-f0-9]+)\/release$/);
     if (releaseMatch) {
+      if (req.headers['x-internal-api-key'] !== INTERNAL_API_KEY) {
+        return jsonResponse(res, 401, { code: 401, message: 'missing or invalid internal API key' });
+      }
+
       const requestID = releaseMatch[1];
       const redeem = redemptionRequests[requestID];
       if (!redeem) {
@@ -1526,11 +1545,11 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('==============================================');
   console.log('  Phase 3 Endpoints (AgentPay AGP + Reconciliation):');
   console.log('    POST /api/v1/wallet/deposit-intents');
-  console.log('    POST /api/v1/wallet/deposit-confirm');
+  console.log('    POST /api/v1/internal/deposit-confirm');
   console.log('    POST /api/v1/wallet/redeem');
-  console.log('    POST /api/v1/wallet/redeem/:id/process');
-  console.log('    POST /api/v1/wallet/redeem/:id/payout');
-  console.log('    POST /api/v1/wallet/redeem/:id/release');
+  console.log('    POST /api/v1/internal/redeem/:id/process');
+  console.log('    POST /api/v1/internal/redeem/:id/payout');
+  console.log('    POST /api/v1/internal/redeem/:id/release');
   console.log('    GET  /api/v1/wallet/mint-status');
   console.log('    GET  /api/v1/wallet/redeem-status');
   console.log('    GET  /api/v1/wallet/reserve-info');
@@ -1538,19 +1557,13 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('    POST /api/v1/admin/reconcile');
   console.log('    POST /api/v1/admin/reconcile/daily');
   console.log('==============================================');
-  console.log('  Agent Auth Endpoints (SUB-026):
-    POST /api/v1/auth/register-agent
-    POST /api/v1/auth/bind-wallet
-    GET  /api/v1/auth/agent-info
-    (all catalog mutations require X-ANCF-Agent-Token)
-==============================================
-  Agent Auth Endpoints (SUB-026):
-    POST /api/v1/auth/register-agent
-    POST /api/v1/auth/bind-wallet
-    GET  /api/v1/auth/agent-info
-    (all catalog mutations require X-ANCF-Agent-Token)
-==============================================
-  Agent Product Upload Endpoints:');
+  console.log('  Agent Auth Endpoints (SUB-026):');
+  console.log('    POST /api/v1/auth/register-agent');
+  console.log('    POST /api/v1/auth/bind-wallet');
+  console.log('    GET  /api/v1/auth/agent-info');
+  console.log('    (all catalog mutations require X-ANCF-Agent-Token)');
+  console.log('==============================================');
+  console.log('  Agent Product Upload Endpoints:');
   console.log('    POST /api/v1/catalog/products');
   console.log('    GET  /api/v1/catalog/products');
   console.log('    GET  /api/v1/catalog/products/:sku_id');

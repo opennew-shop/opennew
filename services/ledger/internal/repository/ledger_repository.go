@@ -1,3 +1,6 @@
+// Package repository 提供双分录账本的持久化访问。
+// 所有写入方法要求调用方传入 *sql.Tx 以掌控事务边界;
+// 余额读取可经 pg_advisory_xact_lock 串行化同一钱包的并发访问。
 package repository
 
 import (

@@ -1,3 +1,7 @@
+// Package service 实现 checkout 结算服务的核心业务逻辑：
+// prepare 生成可签名订单意图负载，commit 完成 EdDSA 签名校验、三路幂等解析、
+// 8 状态订单状态机校验以及单事务内的报价消费、库存扣减与 Outbox 事件写入；
+// 另含签名工具、幂等预检、事务隔离级别决策与 Outbox 事件投递处理器。
 package service
 
 import (
@@ -208,6 +212,7 @@ func (s *CheckoutService) CommitCheckout(ctx context.Context, req *model.CommitR
 	bodyHash := fmt.Sprintf("%x", sha256.Sum256(bodyJSON))
 
 	// Step 2: Quick idempotency pre-check (outside transaction).
+	// 三路幂等解析（事务外快路径）：回放命中返回缓存响应 / 体哈希冲突返回 409 / 全新键则继续提交。
 	// This handles the fast-path cases: replay (return cached response) and conflict (return 409).
 	idCheck, err := CheckAndResolveIdempotency(ctx, s.orderRepo, idempotencyKey, req)
 	if err != nil {
@@ -233,6 +238,7 @@ func (s *CheckoutService) CommitCheckout(ctx context.Context, req *model.CommitR
 	}
 
 	// Step 4: State machine validation — only prepared -> committed is allowed.
+	// 状态机校验：仅允许 prepared -> committed，拦截重复提交或非法状态流转。
 	if err := ValidateTransition(intent.Status, model.StatusCommitted); err != nil {
 		return nil, fmt.Errorf("commit checkout: invalid state transition: %w", err)
 	}
@@ -252,6 +258,7 @@ func (s *CheckoutService) CommitCheckout(ctx context.Context, req *model.CommitR
 	}
 
 	// Step 7: Full EdDSA (Ed25519) signature verification.
+	// 安全核心：校验用户钱包对 signable_payload 的 Ed25519 签名，确保交易意图由钱包私钥本人授权，防止伪造/篡改。
 	if req.WalletSignature == "" {
 		return nil, fmt.Errorf("commit checkout: wallet_signature is required")
 	}
@@ -267,6 +274,7 @@ func (s *CheckoutService) CommitCheckout(ctx context.Context, req *model.CommitR
 	}
 
 	// Step 8: Execute the commit within a single database transaction.
+	// 一致性核心：报价锁定/消费、意图状态流转、库存扣减、Outbox 事件、幂等键保存全部在同一事务内完成，保证原子性。
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: recommendedIsolation()})
 	if err != nil {
 		return nil, fmt.Errorf("commit checkout: failed to begin transaction: %w", err)
@@ -300,6 +308,7 @@ func (s *CheckoutService) CommitCheckout(ctx context.Context, req *model.CommitR
 	}
 
 	// 8d. Mark the quote as consumed within the transaction.
+	// 报价原子消费：consumed 为 false 说明并发请求已抢先消费，回滚以防重复下单/超卖。
 	consumed, err := s.quoteService.MarkQuoteConsumedTx(ctx, tx, req.QuoteID)
 	if err != nil {
 		return nil, fmt.Errorf("commit checkout: failed to mark quote consumed: %w", err)
@@ -309,6 +318,7 @@ func (s *CheckoutService) CommitCheckout(ctx context.Context, req *model.CommitR
 	}
 
 	// 8e. Lock inventory rows and deduct stock for each quote line.
+	// 库存防超卖：逐行 SELECT FOR UPDATE 锁定 SKU 后扣减，扣减条件 WHERE stock >= qty。
 	// Parse the quote lines to extract SKU IDs and quantities.
 	var quoteLines []quoteModel.QuoteLine
 	if err := json.Unmarshal(lockedQuote.Lines, &quoteLines); err != nil {
@@ -326,6 +336,7 @@ func (s *CheckoutService) CommitCheckout(ctx context.Context, req *model.CommitR
 	}
 
 	// 8f. Write outbox event (order_committed) within the transaction.
+	// Outbox 模式：事务内只写发件箱，不直接调用外部服务；事件随事务提交后才对投递器可见。
 	// The event becomes visible to the outbox processor only after COMMIT.
 	evtIDBytes := make([]byte, 16)
 	if _, err := rand.Read(evtIDBytes); err != nil {

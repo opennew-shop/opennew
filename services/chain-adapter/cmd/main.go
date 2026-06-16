@@ -1,3 +1,6 @@
+// Command chain-adapter 是 ANCF Solana 链适配器服务的入口。
+// 它连接 PostgreSQL，装配仓储/处理器，启动充值监听器与 Outbox 充值处理器，
+// 并对外暴露链上交易查询、储备账户查询及充值模拟等 HTTP 端点。
 package main
 
 import (
@@ -20,6 +23,8 @@ import (
 	"github.com/ancf-commerce/ancf/services/chain-adapter/internal/watcher"
 )
 
+// main 初始化日志与数据库连接，装配仓储、MintService 客户端与充值监听器，
+// 启动 Solana 充值监听、Outbox 充值处理器与 HTTP 服务，并处理优雅关停。
 func main() {
 	// Structured JSON logger.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -72,7 +77,7 @@ func main() {
 
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(10)
-	db.SetConnLifetime(5 * time.Minute)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
 	// ------------------------------------------------------------------
 	// Wire up layers
@@ -85,7 +90,8 @@ func main() {
 	if mintURL == "" {
 		mintURL = "http://localhost:8087"
 	}
-	mintClient := service.NewMintServiceClient(mintURL)
+	internalAPIKey := os.Getenv("INTERNAL_API_KEY")
+	mintClient := service.NewMintServiceClient(mintURL, internalAPIKey)
 
 	// Reserve address map — loaded from the database at startup.
 	// In Phase 3, this maps to the placeholder addresses seeded in 001_init.sql.
@@ -153,15 +159,18 @@ func main() {
 	// The simulateDepositFn directly feeds a synthetic DepositEvent into
 	// the pipeline: saves to chain_txs, then invokes the event handler.
 	// In production this function should be nil (disabled).
-	simulateDepositFn := func(event *model.DepositEvent) error {
-		logger.Info("simulate-deposit invoked",
-			"network", event.Network,
-			"tx_hash", event.TxHash,
-			"from", event.FromAddress,
-			"to", event.ToAddress,
-			"amount", event.AmountMinor,
-		)
-		return solanaWatcher.ProcessDepositEvent(context.Background(), event)
+	var simulateDepositFn handler.SimulateDepositFunc
+	if os.Getenv("ENABLE_DEPOSIT_SIMULATOR") == "true" {
+		simulateDepositFn = func(event *model.DepositEvent) error {
+			logger.Info("simulate-deposit invoked",
+				"network", event.Network,
+				"tx_hash", event.TxHash,
+				"from", event.FromAddress,
+				"to", event.ToAddress,
+				"amount", event.AmountMinor,
+			)
+			return solanaWatcher.ProcessDepositEvent(context.Background(), event)
+		}
 	}
 
 	// ------------------------------------------------------------------
@@ -226,6 +235,7 @@ func main() {
 	logger.Info("Deposit outbox processor started",
 		"poll_interval", "2s",
 		"mint_url", mintURL,
+		"internal_auth_configured", internalAPIKey != "",
 	)
 
 	// ------------------------------------------------------------------

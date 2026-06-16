@@ -1,3 +1,8 @@
+// Package main 是 ANCF mint（铸币）服务的程序入口。
+// 它负责装配各层依赖（mint/redemption/reconciliation 仓库与服务、
+// 复用的 ledger 双分录服务以及 chain-adapter 的 outbox 仓库），
+// 注册 HTTP 路由（钱包侧铸币/赎回、服务间内部接口、管理端储备对账），
+// 并启动带优雅停机的 HTTP 服务（默认监听 :8087）。
 package main
 
 import (
@@ -17,10 +22,13 @@ import (
 	ledgerRepo "github.com/ancf-commerce/ancf/services/ledger/internal/repository"
 	ledgerSvc "github.com/ancf-commerce/ancf/services/ledger/internal/service"
 	"github.com/ancf-commerce/ancf/services/mint/internal/handler"
+	"github.com/ancf-commerce/ancf/services/mint/internal/middleware"
 	"github.com/ancf-commerce/ancf/services/mint/internal/repository"
 	"github.com/ancf-commerce/ancf/services/mint/internal/service"
 )
 
+// main 加载配置、连接 PostgreSQL、装配各层依赖并注册路由，
+// 随后启动 HTTP 服务并监听中断信号以执行优雅停机。
 func main() {
 	// Structured JSON logger.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -36,6 +44,7 @@ func main() {
 	if databaseURL == "" {
 		databaseURL = "postgres://ancf:ancf_dev@localhost:5432/ancf_commerce?sslmode=disable"
 	}
+	internalAPIKey := os.Getenv("INTERNAL_API_KEY")
 
 	logger.Info("starting ANCF Mint Service",
 		"port", port,
@@ -98,15 +107,18 @@ func main() {
 	wallet := r.Group("/api/v1/wallet")
 	// Mint endpoints.
 	wallet.POST("/deposit-intents", mintHandler.CreateDepositIntent)
-	wallet.POST("/deposit-confirm", mintHandler.ConfirmDeposit)
 	wallet.GET("/mint-status", mintHandler.GetMintStatus)
 	wallet.GET("/reserve-info", mintHandler.GetReserveInfo)
 	// Redemption endpoints.
 	wallet.POST("/redeem", redemptionHandler.CreateRedemption)
-	wallet.POST("/redeem/:request_id/process", redemptionHandler.ProcessRedemption)
 	wallet.GET("/redeem-status", redemptionHandler.GetRedemptionStatus)
-	wallet.POST("/redeem/:request_id/payout", redemptionHandler.CompletePayout)
-	wallet.POST("/redeem/:request_id/release", redemptionHandler.ReleaseFunds)
+
+	internal := r.Group("/api/v1/internal")
+	internal.Use(middleware.InternalAPIKeyAuth(internalAPIKey))
+	internal.POST("/deposit-confirm", mintHandler.ConfirmDeposit)
+	internal.POST("/redeem/:request_id/process", redemptionHandler.ProcessRedemption)
+	internal.POST("/redeem/:request_id/payout", redemptionHandler.CompletePayout)
+	internal.POST("/redeem/:request_id/release", redemptionHandler.ReleaseFunds)
 
 	// Admin API (reconciliation endpoints).
 	admin := r.Group("/api/v1/admin")
@@ -117,14 +129,14 @@ func main() {
 	logger.Info("routes registered",
 		"GET_health", "/health",
 		"POST_deposit_intents", "/api/v1/wallet/deposit-intents",
-		"POST_deposit_confirm", "/api/v1/wallet/deposit-confirm",
 		"GET_mint_status", "/api/v1/wallet/mint-status",
 		"GET_reserve_info", "/api/v1/wallet/reserve-info",
 		"POST_redeem", "/api/v1/wallet/redeem",
-		"POST_redeem_process", "/api/v1/wallet/redeem/:request_id/process",
 		"GET_redeem_status", "/api/v1/wallet/redeem-status",
-		"POST_redeem_payout", "/api/v1/wallet/redeem/:request_id/payout",
-		"POST_redeem_release", "/api/v1/wallet/redeem/:request_id/release",
+		"POST_internal_deposit_confirm", "/api/v1/internal/deposit-confirm",
+		"POST_internal_redeem_process", "/api/v1/internal/redeem/:request_id/process",
+		"POST_internal_redeem_payout", "/api/v1/internal/redeem/:request_id/payout",
+		"POST_internal_redeem_release", "/api/v1/internal/redeem/:request_id/release",
 		"POST_admin_reconcile", "/api/v1/admin/reconcile",
 		"GET_admin_reconciliation_status", "/api/v1/admin/reconciliation-status",
 		"POST_admin_reconcile_daily", "/api/v1/admin/reconcile/daily",

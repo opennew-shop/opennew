@@ -1,3 +1,5 @@
+// Package service 实现商品目录的业务逻辑：全文检索、向量召回、混合检索（RRF 融合）与面向 Agent 的 RAG，
+// 以及商品的增删改查、嵌入向量生成和钱包地址安全隔离。
 package service
 
 import (

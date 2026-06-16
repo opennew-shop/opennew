@@ -861,3 +861,28 @@ mobile 390x844
 ### 修复的端口冲突
 - mock server 端口: 硬编码8080 → `process.env.PORT || ‘8080’`
 - Gateway 代理到 mock 默认用 9080 (避免冲突)
+
+---
+
+## Phase 8: 项目总结 + 全量中文注释 ✅ (2026-06-14)
+
+### 完成进度核验（按实际代码扫描，非文档口径）
+- 后端 Go 代码：11 个服务目录，其中 **9 个有实际代码 + 独立 `cmd/main.go`**（api-gateway/catalog/quote/checkout/ledger/mint/chain-adapter/provisioning/audit），共 89 个 `.go` 文件。
+- `payment/`、`firmware/` 仅空目录，无 `.go` 文件 → 实际状态为“规划”，与 `SERVICE_STATUS.md` 标注的 Active 不符（已在总结中标注偏差）。
+- 端口以各服务 `cmd/main.go` 默认值为准，与 `services/PORTS.md` 一致；`SERVICE_STATUS.md` 端口列已过时。
+- 前端固件（Web Components / Vue / animated-retail 模板）、Node 本地渲染器、onchain Rust 项目（vusdc-mint / agentpay-mint）均存在实际源码。
+
+### SUB-036 ✅ 项目总结文件
+- 新增 `项目总结.md`：完成进度评估表、服务实现状态（代码核验口径）、**完整代码结构树**（逐文件职责标注）、分层架构约定、关键设计决策、安全措施、数据库、运行方式、已知偏差。
+
+### SUB-037 ✅ 全量中文注释（ADD-ONLY）
+- 对 9 个服务的 89 个 `.go` 文件补充简体中文注释，原则：只增不改，不翻译/不改写已有英文 GoDoc，不改动任何代码。
+- 重点补齐：**包级文档注释**（此前 45/47 包缺失，仅 chain-adapter/solana 有）、未注释的导出符号、零注释的测试文件（`deposit_processor_test.go`、`internal_auth_test.go`）。
+- 由 7 个并行子代理按服务分工完成（api-gateway / catalog / ledger+quote / mint / checkout / audit+provisioning / chain-adapter）。
+
+### 顺带修复
+- `services/mint/internal/service/redemption_service.go` 文件头部的 UTF-8 BOM（`EF BB BF`）已移除，避免 `package` 前的隐藏字符影响工具链与 diff。
+
+### 复核建议
+- 本环境无 `go`/`gofmt` 工具链；注释为纯新增不影响编译。建议在具备 Go 1.22 的环境执行 `gofmt -l ./services` 与 `go build ./...` 做一次复核。
+

@@ -1,3 +1,6 @@
+// Package repository 封装审计服务对 audit_log 不可变表的持久化访问。
+// 仅提供追加 (INSERT) 与只读查询，不暴露 UPDATE/DELETE；
+// 写入须在调用方管理的事务内进行，以与触发审计的业务操作保持原子性。
 package repository
 
 import (

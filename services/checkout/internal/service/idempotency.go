@@ -10,6 +10,7 @@ import (
 )
 
 // IdempotencyResult represents the outcome of an idempotency pre-check.
+// 幂等预检结果：标识请求是新建、回放还是冲突。
 type IdempotencyResult int
 
 const (
@@ -36,6 +37,9 @@ type IdempotencyCheckResult struct {
 //  3. If key exists and hash matches -> return cached CommitResponse (IdempotencyReplay)
 //  4. If key exists but hash does NOT match -> return 409 Conflict (IdempotencyConflict)
 //  5. If key does not exist -> return IdempotencyNew (proceed with transaction)
+//
+// 中文说明：commit 事务前的三路幂等解析——按请求体 SHA-256 比对幂等键：
+// 命中且哈希一致→回放缓存响应；命中但哈希不同→409 冲突；未命中→放行新请求。
 func CheckAndResolveIdempotency(ctx context.Context, repo *repository.OrderRepository, key string, req *model.CommitRequest) (*IdempotencyCheckResult, error) {
 	// Compute request body hash.
 	bodyJSON, err := json.Marshal(req)

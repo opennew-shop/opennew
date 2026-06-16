@@ -1,3 +1,6 @@
+// Package repository 提供 chain-adapter 服务的持久化层，封装链上交易
+// （chain_txs）、储备账户（reserve_accounts）以及 Outbox 事件表的数据库读写，
+// 支撑充值监听与跨服务最终一致性。
 package repository
 
 import (
@@ -5,6 +8,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/ancf-commerce/ancf/services/chain-adapter/internal/model"
@@ -14,6 +18,9 @@ import (
 type ChainRepository struct {
 	db *sql.DB
 }
+
+// ErrDuplicateChainTx indicates that a chain transaction already exists.
+var ErrDuplicateChainTx = errors.New("chain transaction already exists")
 
 // NewChainRepository creates a new ChainRepository backed by the given *sql.DB.
 func NewChainRepository(db *sql.DB) *ChainRepository {
@@ -30,24 +37,26 @@ func (r *ChainRepository) SaveChainTxWithTx(ctx context.Context, tx *sql.Tx, cha
 		return fmt.Errorf("chain_repository: unknown network %q", chainTx.Network)
 	}
 
-	stmt := `INSERT INTO chain_txs (network, tx_hash, tx_type, status, confirmations, raw_json)
-		VALUES ($1, $2, $3, $4, $5, $6)`
+	stmt := `INSERT INTO chain_txs (network, tx_hash, tx_type, status, confirmations, raw_json, finalized_at)
+		VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $4 = 'finalized' THEN NOW() ELSE NULL END)
+		ON CONFLICT (network, tx_hash) DO NOTHING`
 
-	_, err := tx.ExecContext(ctx, stmt,
+	result, err := tx.ExecContext(ctx, stmt,
 		chainTx.Network, chainTx.TxHash, chainTx.TxType, chainTx.Status,
 		chainTx.Confirmations, chainTx.RawJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("chain_repository: save chain tx with tx %s/%s: %w", chainTx.Network, chainTx.TxHash, err)
 	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return ErrDuplicateChainTx
+	}
 	return nil
 }
 
 // SaveChainTx inserts a new chain transaction record into the chain_txs table.
-// If a row with the same (network, tx_hash) already exists the call is a no-op
-// (checked via GetByTxHash before insert). Note: the chain_txs table does not
-// have a UNIQUE constraint on (network, tx_hash) in the current schema; an
-// application-level check prevents duplicates.
+// If a row with the same (network, tx_hash) already exists the call is a no-op.
 func (r *ChainRepository) SaveChainTx(ctx context.Context, tx *model.ChainTx) error {
 	if tx.TxHash == "" || tx.Network == "" {
 		return fmt.Errorf("chain_repository: tx_hash and network are required")
@@ -56,7 +65,6 @@ func (r *ChainRepository) SaveChainTx(ctx context.Context, tx *model.ChainTx) er
 		return fmt.Errorf("chain_repository: unknown network %q", tx.Network)
 	}
 
-	// Check for existence first (no UNIQUE constraint on network+tx_hash).
 	existing, err := r.GetByTxHash(ctx, tx.Network, tx.TxHash)
 	if err != nil {
 		return err
@@ -65,15 +73,42 @@ func (r *ChainRepository) SaveChainTx(ctx context.Context, tx *model.ChainTx) er
 		return nil // already exists, no-op
 	}
 
-	stmt := `INSERT INTO chain_txs (network, tx_hash, tx_type, status, confirmations, raw_json)
-		VALUES ($1, $2, $3, $4, $5, $6)`
+	stmt := `INSERT INTO chain_txs (network, tx_hash, tx_type, status, confirmations, raw_json, finalized_at)
+		VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $4 = 'finalized' THEN NOW() ELSE NULL END)
+		ON CONFLICT (network, tx_hash) DO NOTHING`
 
-	_, err = r.db.ExecContext(ctx, stmt,
+	result, err := r.db.ExecContext(ctx, stmt,
 		tx.Network, tx.TxHash, tx.TxType, tx.Status,
 		tx.Confirmations, tx.RawJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("chain_repository: save chain tx %s/%s: %w", tx.Network, tx.TxHash, err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return nil
+	}
+	return nil
+}
+
+// IncrementReserveConfirmedWithTx increases confirmed reserve balance for a finalized deposit.
+func (r *ChainRepository) IncrementReserveConfirmedWithTx(ctx context.Context, tx *sql.Tx, network, assetSymbol string, amountMinor int64) error {
+	if amountMinor <= 0 {
+		return fmt.Errorf("chain_repository: reserve increment amount must be positive, got %d", amountMinor)
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE reserve_accounts
+		SET confirmed_balance_minor = confirmed_balance_minor + $3,
+		    updated_at = NOW(),
+		    last_reconciled_at = NOW()
+		WHERE network = $1 AND asset_symbol = $2
+	`, network, assetSymbol, amountMinor)
+	if err != nil {
+		return fmt.Errorf("chain_repository: increment reserve %s/%s: %w", network, assetSymbol, err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("chain_repository: reserve account not found for network=%s asset=%s", network, assetSymbol)
 	}
 	return nil
 }
@@ -105,30 +140,30 @@ func (r *ChainRepository) GetByTxHash(ctx context.Context, network string, txHas
 
 // UpdateConfirmations updates the confirmation count and optionally the status
 // of a chain transaction identified by its tx_hash.
-func (r *ChainRepository) UpdateConfirmations(ctx context.Context, txHash string, confirmations int, status string) error {
+func (r *ChainRepository) UpdateConfirmations(ctx context.Context, network string, txHash string, confirmations int, status string) error {
 	if status == "" {
 		status = model.TxStatusConfirmed
 	}
 	stmt := `UPDATE chain_txs
-		SET confirmations = $2, status = $3
-		WHERE tx_hash = $1`
+			SET confirmations = $2, status = $3
+			WHERE tx_hash = $1 AND network = $4`
 
-	_, err := r.db.ExecContext(ctx, stmt, txHash, confirmations, status)
+	_, err := r.db.ExecContext(ctx, stmt, txHash, confirmations, status, network)
 	if err != nil {
-		return fmt.Errorf("chain_repository: update confirmations %s: %w", txHash, err)
+		return fmt.Errorf("chain_repository: update confirmations %s/%s: %w", network, txHash, err)
 	}
 	return nil
 }
 
 // MarkFinalized sets the status of a chain transaction to 'finalized' and records the time.
-func (r *ChainRepository) MarkFinalized(ctx context.Context, txHash string) error {
+func (r *ChainRepository) MarkFinalized(ctx context.Context, network string, txHash string) error {
 	stmt := `UPDATE chain_txs
-		SET status = $2, finalized_at = NOW()
-		WHERE tx_hash = $1`
+			SET status = $2, finalized_at = NOW()
+			WHERE tx_hash = $1 AND network = $3`
 
-	_, err := r.db.ExecContext(ctx, stmt, txHash, model.TxStatusFinalized)
+	_, err := r.db.ExecContext(ctx, stmt, txHash, model.TxStatusFinalized, network)
 	if err != nil {
-		return fmt.Errorf("chain_repository: mark finalized %s: %w", txHash, err)
+		return fmt.Errorf("chain_repository: mark finalized %s/%s: %w", network, txHash, err)
 	}
 	return nil
 }

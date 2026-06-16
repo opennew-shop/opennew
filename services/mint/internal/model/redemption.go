@@ -9,6 +9,9 @@ import (
 // Redemption status constants
 // ---------------------------------------------------------------------------
 
+// 赎回状态常量 —— 定义 8 状态赎回状态机的各状态取值：created、balance_locked、
+// burn_submitted、burned、payout_submitted、paid（正常路径终态），
+// 以及 failed、released（失败回滚路径终态）。
 const (
 	RedemptionStatusCreated        = "created"
 	RedemptionStatusBalanceLocked  = "balance_locked"
@@ -32,6 +35,7 @@ const (
 //	any -> failed -> released
 // ---------------------------------------------------------------------------
 
+// RedemptionTransitions 定义赎回状态机的合法状态转移表，终态（paid/released）无出边。
 var RedemptionTransitions = map[string][]string{
 	RedemptionStatusCreated:          {RedemptionStatusBalanceLocked, RedemptionStatusFailed},
 	RedemptionStatusBalanceLocked:    {RedemptionStatusBurnSubmitted, RedemptionStatusFailed},

@@ -1,3 +1,5 @@
+// Package repository 封装服务开通对 order_intents、outbox 与 audit_log 表的数据访问，
+// 包含订单意图的查询/行锁/状态流转、Outbox 事件的拉取与发布，以及审计日志写入。
 package repository
 
 import (

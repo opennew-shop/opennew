@@ -1,3 +1,5 @@
+// Package model 定义报价(quote)服务的领域模型。
+// 报价为服务端权威定价,短时有效(默认 5 分钟 TTL)且仅可消费一次。
 package model
 
 import (

@@ -18,6 +18,9 @@ import (
 //
 // Content is defined per demo.md Section 5 (Discovery Manifest) and Section 16
 // (Alipay A2A Payment Rail).
+//
+// 中文说明：在 GET /.well-known/agent-rules.json 提供 ANCF 发现 manifest，
+// 包含协议版本、能力、schema、固件、Agent 策略、支付 rail 与签名等 Agent 交互所需信息。
 func ServeManifest(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		now := time.Now().UTC()

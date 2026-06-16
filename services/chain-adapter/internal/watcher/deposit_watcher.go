@@ -1,3 +1,6 @@
+// Package watcher 实现各区块链网络的充值监听器（deposit watcher）：
+// 轮询 RPC 检测打入储备地址的转账，去重后写入 chain_txs，并在同一事务内
+// 写入 Outbox 事件以驱动下游铸币。提供网络无关的基类与 Solana 具体实现。
 package watcher
 
 import (
@@ -6,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -175,8 +179,8 @@ func (w *DepositWatcher) processEvent(ctx context.Context, event *model.DepositE
 		Network:       event.Network,
 		TxHash:        event.TxHash,
 		TxType:        model.TxTypeDeposit,
-		Status:        model.TxStatusConfirmed,
-		Confirmations: 1,
+		Status:        model.TxStatusFinalized,
+		Confirmations: 32,
 		RawJSON:       rawJSON,
 	}
 
@@ -190,7 +194,15 @@ func (w *DepositWatcher) processEvent(ctx context.Context, event *model.DepositE
 		defer tx.Rollback()
 
 		if err := w.ChainRepo.SaveChainTxWithTx(ctx, tx, chainTx); err != nil {
+			if errors.Is(err, repository.ErrDuplicateChainTx) {
+				return nil
+			}
 			w.logger.Error("failed to save chain tx (with tx)", "tx_hash", event.TxHash, "error", err)
+			return err
+		}
+
+		if err := w.ChainRepo.IncrementReserveConfirmedWithTx(ctx, tx, event.Network, event.AssetSymbol, event.AmountMinor); err != nil {
+			w.logger.Error("failed to increment reserve balance", "tx_hash", event.TxHash, "error", err)
 			return err
 		}
 
@@ -253,22 +265,24 @@ func generateWOutboxID(prefix string) string {
 // mustMarshalOutboxPayload builds the JSON payload for a deposit_detected outbox event.
 func mustMarshalOutboxPayload(event *model.DepositEvent) []byte {
 	type depositPayload struct {
-		Network     string `json:"network"`
-		TxHash      string `json:"tx_hash"`
-		FromAddress string `json:"from_address"`
-		ToAddress   string `json:"to_address"`
-		AmountMinor int64  `json:"amount_minor"`
-		AssetSymbol string `json:"asset_symbol"`
-		BlockNumber int64  `json:"block_number"`
+		Network         string `json:"network"`
+		TxHash          string `json:"tx_hash"`
+		FromAddress     string `json:"from_address"`
+		ToAddress       string `json:"to_address"`
+		AmountMinor     int64  `json:"amount_minor"`
+		AssetSymbol     string `json:"asset_symbol"`
+		DepositIntentID string `json:"deposit_intent_id,omitempty"`
+		BlockNumber     int64  `json:"block_number"`
 	}
 	data, err := json.Marshal(depositPayload{
-		Network:     event.Network,
-		TxHash:      event.TxHash,
-		FromAddress: event.FromAddress,
-		ToAddress:   event.ToAddress,
-		AmountMinor: event.AmountMinor,
-		AssetSymbol: event.AssetSymbol,
-		BlockNumber: event.BlockNumber,
+		Network:         event.Network,
+		TxHash:          event.TxHash,
+		FromAddress:     event.FromAddress,
+		ToAddress:       event.ToAddress,
+		AmountMinor:     event.AmountMinor,
+		AssetSymbol:     event.AssetSymbol,
+		DepositIntentID: event.DepositIntentID,
+		BlockNumber:     event.BlockNumber,
 	})
 	if err != nil {
 		return []byte("{}")

@@ -222,11 +222,13 @@ func NewOpenAIEmbeddingProvider(cfg OpenAIEmbeddingConfig) *OpenAIEmbeddingProvi
 	}
 }
 
+// openAIEmbeddingRequest 是调用 OpenAI 嵌入接口的请求体。
 type openAIEmbeddingRequest struct {
 	Input string `json:"input"`
 	Model string `json:"model"`
 }
 
+// openAIEmbeddingResponse 是 OpenAI 嵌入接口的响应体，包含嵌入数据或错误信息。
 type openAIEmbeddingResponse struct {
 	Data []struct {
 		Embedding []float64 `json:"embedding"`

@@ -7,6 +7,8 @@ const crypto = require('crypto');
 
 const API = 'http://127.0.0.1:8080';
 const AGENT = 'http://127.0.0.1:3000';
+const INTERNAL_API = process.env.MINT_SERVICE_URL || API;
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'change-me-in-production';
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -265,9 +267,10 @@ await testAsync('5.1 创建充值意图', async () => {
 });
 
 await testAsync('5.2 确认充值到账', async () => {
-  const r = await fetchJSON(API + '/api/v1/wallet/deposit-confirm', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: {deposit_intent_id: depositIntentId, deposit_tx_id: 'tx_mock_' + Date.now()}
+  const r = await fetchJSON(INTERNAL_API + '/api/v1/internal/deposit-confirm', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Internal-API-Key': INTERNAL_API_KEY},
+    body: {deposit_intent_id: depositIntentId, deposit_tx_id: 'tx_mock_' + Date.now(), amount_minor: '50000000'}
   });
   console.log(`      status: ${r.body.status} (预期credited)`);
   console.log(`      amount: ${r.body.amount_minor} minor units`);
@@ -285,8 +288,10 @@ await testAsync('5.3 创建赎回请求', async () => {
 });
 
 await testAsync('5.4 处理赎回', async () => {
-  const r = await fetchJSON(API + `/api/v1/wallet/redeem/${redeemId}/process`, {
-    method: 'POST', headers: {'Content-Type': 'application/json'}, body: {}
+  const r = await fetchJSON(INTERNAL_API + `/api/v1/internal/redeem/${redeemId}/process`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-Internal-API-Key': INTERNAL_API_KEY},
+    body: {}
   });
   console.log(`      status: ${r.body.status || r.body.message || 'processed'}`);
 });

@@ -26,6 +26,10 @@ import (
 // - completed:   service provisioned successfully (terminal state)
 // - failed:      unrecoverable error at any recoverable stage
 // - refunded:    funds returned after failure (terminal state)
+//
+// 中文说明：订单 8 状态机的合法流转表。主干流程为
+// created→prepared→committed→paid→provisioning→completed；
+// 各可恢复阶段可转 failed，failed 可转 refunded；completed/refunded 为终态。
 var allowedTransitions = map[string][]string{
 	model.StatusCreated:      {model.StatusPrepared},
 	model.StatusPrepared:     {model.StatusCommitted, model.StatusFailed},
@@ -39,6 +43,7 @@ var allowedTransitions = map[string][]string{
 
 // ValidateTransition checks whether a state transition from currentStatus to newStatus is allowed.
 // Returns nil if the transition is valid, or an error describing why it is not.
+// 校验状态流转是否合法：合法返回 nil，否则返回说明原因的错误。
 func ValidateTransition(currentStatus, newStatus string) error {
 	allowed, ok := allowedTransitions[currentStatus]
 	if !ok {

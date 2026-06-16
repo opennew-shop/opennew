@@ -1,3 +1,6 @@
+// Package service 实现 chain-adapter 的后台业务逻辑：
+// 通过 Outbox 模式消费 deposit_detected 事件，并以 HTTP 方式可靠投递给
+// MintService，实现链适配器与铸币服务之间的跨服务最终一致性。
 package service
 
 import (
@@ -15,13 +18,14 @@ import (
 
 // DepositPayload is the deserialised payload of a deposit_detected outbox event.
 type DepositPayload struct {
-	Network     string `json:"network"`
-	TxHash      string `json:"tx_hash"`
-	FromAddress string `json:"from_address"`
-	ToAddress   string `json:"to_address"`
-	AmountMinor int64  `json:"amount_minor"`
-	AssetSymbol string `json:"asset_symbol"`
-	BlockNumber int64  `json:"block_number"`
+	Network         string `json:"network"`
+	TxHash          string `json:"tx_hash"`
+	FromAddress     string `json:"from_address"`
+	ToAddress       string `json:"to_address"`
+	AmountMinor     int64  `json:"amount_minor"`
+	AssetSymbol     string `json:"asset_symbol"`
+	DepositIntentID string `json:"deposit_intent_id,omitempty"`
+	BlockNumber     int64  `json:"block_number"`
 }
 
 // ConfirmDepositRequest is the HTTP request body for MintService's deposit confirm endpoint.
@@ -142,12 +146,10 @@ func (p *DepositProcessor) processEvent(ctx context.Context, evt repository.Outb
 		return
 	}
 
-	// Extract deposit_intent_id from the memo convention or derive it.
-	// The Memo format is "ancf-deposit:<asset_symbol>:<deposit_intent_id>".
-	// When an explicit deposit_intent_id was not pre-created, we derive one
-	// from the tx_hash (best-effort matching by wallet address would be
-	// done in a maturation step).
-	depositIntentID := deriveDepositIntentID(payload.TxHash, payload.FromAddress, payload.AssetSymbol)
+	depositIntentID := payload.DepositIntentID
+	if depositIntentID == "" {
+		depositIntentID = deriveDepositIntentID(payload.TxHash, payload.FromAddress, payload.AssetSymbol)
+	}
 
 	req := ConfirmDepositRequest{
 		DepositIntentID: depositIntentID,
@@ -210,15 +212,17 @@ func deriveDepositIntentID(txHash, wallet, assetSymbol string) string {
 
 // MintServiceClient is an HTTP client for calling the MintService API.
 type MintServiceClient struct {
-	BaseURL    string
-	HTTPClient *http.Client
-	logger     *slog.Logger
+	BaseURL        string
+	InternalAPIKey string
+	HTTPClient     *http.Client
+	logger         *slog.Logger
 }
 
 // NewMintServiceClient creates a new MintServiceClient.
-func NewMintServiceClient(baseURL string) *MintServiceClient {
+func NewMintServiceClient(baseURL string, internalAPIKey string) *MintServiceClient {
 	return &MintServiceClient{
-		BaseURL: strings.TrimRight(baseURL, "/"),
+		BaseURL:        strings.TrimRight(baseURL, "/"),
+		InternalAPIKey: internalAPIKey,
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -226,7 +230,7 @@ func NewMintServiceClient(baseURL string) *MintServiceClient {
 	}
 }
 
-// ConfirmDeposit calls POST /api/v1/wallet/deposit-confirm on the MintService.
+// ConfirmDeposit calls POST /api/v1/internal/deposit-confirm on the MintService.
 // The MintService.ConfirmDeposit is idempotent by deposit_tx_id, so repeated
 // calls for the same deposit are safe.
 func (c *MintServiceClient) ConfirmDeposit(ctx context.Context, req ConfirmDepositRequest) error {
@@ -235,12 +239,15 @@ func (c *MintServiceClient) ConfirmDeposit(ctx context.Context, req ConfirmDepos
 		return fmt.Errorf("mint client: marshal request: %w", err)
 	}
 
-	url := c.BaseURL + "/api/v1/wallet/deposit-confirm"
+	url := c.BaseURL + "/api/v1/internal/deposit-confirm"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(body)))
 	if err != nil {
 		return fmt.Errorf("mint client: create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if c.InternalAPIKey != "" {
+		httpReq.Header.Set("X-Internal-API-Key", c.InternalAPIKey)
+	}
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {

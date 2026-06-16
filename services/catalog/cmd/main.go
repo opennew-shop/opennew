@@ -1,3 +1,5 @@
+// Package main 启动 catalog 商品目录服务：装配数据库连接与各层依赖（仓库、目录服务、
+// 向量嵌入、混合检索、RAG），注册商品搜索与 Agent 商品管理的 HTTP 路由，并以优雅关闭方式运行 Gin 服务。
 package main
 
 import (
@@ -18,6 +20,8 @@ import (
 	"github.com/ancf-commerce/ancf/services/catalog/internal/service"
 )
 
+// main 是 catalog 服务进程入口：读取环境变量配置、建立并校验数据库连接、装配各层依赖与路由，
+// 然后启动 HTTP 服务并在收到中断 / SIGTERM 信号时优雅关闭。
 func main() {
 	// Read configuration from environment variables.
 	databaseURL := os.Getenv("DATABASE_URL")

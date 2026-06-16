@@ -33,7 +33,7 @@
 | POST | `/api/v1/cli/checkout/commit` | checkout | Idempotency-Key | Active | See test-sandbox.cjs Phase 3 |
 | GET | `/api/v1/wallet/balance` | ledger | No | Active | Balance query endpoint |
 | POST | `/api/v1/wallet/deposit-intents` | mint | No | Active | See test-sandbox.cjs Phase 4 |
-| POST | `/api/v1/wallet/deposit-confirm` | mint | Internal | Active | See test-sandbox.cjs Phase 4 |
+| POST | `/api/v1/internal/deposit-confirm` | mint | Internal | Active | See test-sandbox.cjs Phase 4 |
 | POST | `/api/v1/wallet/redeem` | mint | No | Active | Redemption workflow |
 | GET | `/api/v1/wallet/mint-status` | mint | No | Active | `?request_id=xxx` |
 | GET | `/api/v1/wallet/redeem-status` | mint | No | Active | `?request_id=xxx` |

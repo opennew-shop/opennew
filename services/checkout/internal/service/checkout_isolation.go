@@ -33,6 +33,10 @@ import "database/sql"
 //
 // PostgreSQL default is READ COMMITTED, and this is the standard level used by
 // most high-throughput OLTP applications.
+//
+// 中文说明：CommitCheckout 已对 idempotency_keys / quotes / order_intents / catalog_skus
+// 等所有关键行显式加锁，因此采用 READ COMMITTED + 行级锁即可在保持同等正确性的前提下，
+// 获得比 SERIALIZABLE(SSI) 更高的并发吞吐，并避免 40001 序列化失败重试。
 func recommendedIsolation() sql.IsolationLevel {
 	return sql.LevelReadCommitted
 }

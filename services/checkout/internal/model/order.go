@@ -1,3 +1,5 @@
+// Package model 定义 checkout 结算服务的数据模型：订单意图、可签名负载、
+// prepare/commit 请求与响应，以及幂等缓存响应结构。
 package model
 
 import (
@@ -24,6 +26,9 @@ type OrderIntent struct {
 	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
 }
 
+// 订单意图状态常量：构成 8 状态订单状态机的全部状态
+// (created/prepared/committed/paid/provisioning/completed/failed/refunded)，
+// 合法流转规则见 service/state_machine.go。
 // Order intent status constants.
 const (
 	StatusCreated      = "created"

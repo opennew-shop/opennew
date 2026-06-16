@@ -1,3 +1,6 @@
+// Package service 提供审计服务的业务逻辑层，
+// 在 repository 之上封装事件校验、独立事务写入与复用调用方事务的写入，
+// 供审计 handler 及其他服务在自身事务边界内记录不可变审计事件。
 package service
 
 import (

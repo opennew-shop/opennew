@@ -19,6 +19,9 @@ import (
 // Core invariant (demo.md 7.1 and 7.2):
 //
 //	total_internal_liability + pending_redemption <= confirmed_reserve_balance
+//
+// 中文说明：储备对账服务，针对影子账本 vUSDC 模型执行“储备 vs 负债”对账。
+// 可经 POST /api/v1/admin/reconcile 手动触发或由定时任务调用，核验上述储备不变式。
 type ReconciliationService struct {
 	db       *sql.DB
 	mintRepo *repository.MintRepository

@@ -11,6 +11,7 @@ import (
 // RAGService provides Retrieval-Augmented Generation for Agent product discovery.
 // It combines hybrid search (keyword + vector semantic) with context building
 // to enable natural-language product queries from Agents.
+// 中文说明：面向 Agent 的检索增强(RAG)服务，融合混合检索(关键词+向量语义)与上下文构建，支持自然语言商品查询。
 type RAGService struct {
 	hybridSearch *HybridSearchService
 }

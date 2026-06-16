@@ -23,6 +23,9 @@ var ErrSKULocked = fmt.Errorf("sku_repository: SKU is locked by another transact
 //
 // Returns the locked SKU on success, or ErrSKULocked if the row is currently
 // locked by another transaction.
+//
+// 中文说明：用 SELECT ... FOR UPDATE SKIP LOCKED 尝试锁定单个 SKU 行。
+// 抢同一 SKU 时（如秒杀），先到者持锁推进，后到者立即收到 ErrSKULocked 而非阻塞，避免高并发锁竞争雪崩。
 func (r *SKURepository) LockSKUForUpdateSkipLocked(ctx context.Context, tx *sql.Tx, skuID string) (*model.SKU, error) {
 	sqlStmt := `SELECT
 			id, sku_id, title, description, currency, price_amount_minor, price_scale,

@@ -1,3 +1,6 @@
+// Package service 提供报价生成与校验的业务逻辑。
+// 报价默认 5 分钟有效,校验涵盖存在性、过期、已消费与钱包绑定,
+// 并通过事务内 SELECT FOR UPDATE 实现原子消费。
 package service
 
 import (

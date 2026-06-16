@@ -1,3 +1,5 @@
+// Package handler 实现 chain-adapter 服务的 HTTP 接口层：
+// 链上交易查询、储备账户查询，以及 Phase 3 开发用的充值模拟端点。
 package handler
 
 import (
@@ -265,13 +267,14 @@ func (h *ChainHandler) SimulateDeposit(c *gin.Context) {
 	}
 
 	var req struct {
-		Network     string `json:"network"`
-		TxHash      string `json:"tx_hash"`
-		FromAddress string `json:"from_address"`
-		ToAddress   string `json:"to_address"`
-		AmountMinor int64  `json:"amount_minor"`
-		AssetSymbol string `json:"asset_symbol"`
-		BlockNumber int64  `json:"block_number"`
+		Network         string `json:"network"`
+		TxHash          string `json:"tx_hash"`
+		FromAddress     string `json:"from_address"`
+		ToAddress       string `json:"to_address"`
+		AmountMinor     int64  `json:"amount_minor"`
+		AssetSymbol     string `json:"asset_symbol"`
+		DepositIntentID string `json:"deposit_intent_id"`
+		BlockNumber     int64  `json:"block_number"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -313,14 +316,15 @@ func (h *ChainHandler) SimulateDeposit(c *gin.Context) {
 	}
 
 	event := &model.DepositEvent{
-		Network:     req.Network,
-		TxHash:      req.TxHash,
-		FromAddress: req.FromAddress,
-		ToAddress:   req.ToAddress,
-		AmountMinor: req.AmountMinor,
-		AssetSymbol: req.AssetSymbol,
-		BlockNumber: req.BlockNumber,
-		Timestamp:   time.Now().UTC(),
+		Network:         req.Network,
+		TxHash:          req.TxHash,
+		FromAddress:     req.FromAddress,
+		ToAddress:       req.ToAddress,
+		AmountMinor:     req.AmountMinor,
+		AssetSymbol:     req.AssetSymbol,
+		DepositIntentID: req.DepositIntentID,
+		BlockNumber:     req.BlockNumber,
+		Timestamp:       time.Now().UTC(),
 	}
 
 	if err := h.simulateDepositFn(event); err != nil {
@@ -339,6 +343,7 @@ func (h *ChainHandler) SimulateDeposit(c *gin.Context) {
 		"tx_hash": event.TxHash,
 		"amount_minor": event.AmountMinor,
 		"asset_symbol": event.AssetSymbol,
+		"deposit_intent_id": event.DepositIntentID,
 		"from_address": event.FromAddress,
 		"timestamp": event.Timestamp.UTC().Format(time.RFC3339),
 	})

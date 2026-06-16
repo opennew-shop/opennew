@@ -1,3 +1,4 @@
+// Package handler 提供账本服务的 HTTP 接口,处理钱包余额汇总与分录分页查询。
 package handler
 
 import (

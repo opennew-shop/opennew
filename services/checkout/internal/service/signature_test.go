@@ -15,6 +15,7 @@ import (
 //   2. Tampered message fails
 //   3. Invalid base64 signature format returns error
 //   4. Wrong public key fails
+// 验证完整 EdDSA 校验流程：有效签名通过、被篡改消息失败、非法 base64 报错、错误公钥失败。
 func TestVerifyEdDSASignature(t *testing.T) {
 	// Generate test Ed25519 key pair.
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -108,6 +109,7 @@ func TestVerifyEdDSASignature(t *testing.T) {
 }
 
 // TestDerivePublicKey validates the hex wallet address to Ed25519 public key derivation.
+// 验证由十六进制钱包地址（含/不含 0x 前缀）派生 Ed25519 公钥，并对非法长度/字符报错。
 func TestDerivePublicKey(t *testing.T) {
 	t.Run("valid hex address without prefix", func(t *testing.T) {
 		// 32 bytes of random data, hex-encoded = 64 chars.
@@ -150,6 +152,7 @@ func TestDerivePublicKey(t *testing.T) {
 }
 
 // TestCanonicalJSON verifies that JSON marshaling produces deterministic output.
+// 验证规范化 JSON 序列化按键名字母序输出，结果确定可复现。
 func TestCanonicalJSON(t *testing.T) {
 	// Go's json.Marshal sorts map keys alphabetically.
 	v := map[string]interface{}{
@@ -169,6 +172,7 @@ func TestCanonicalJSON(t *testing.T) {
 }
 
 // TestBuildSignableMessage verifies the message format for wallet signing.
+// 验证待签名消息格式以 "ANCF_CHECKOUT:" 前缀拼接规范化 JSON。
 func TestBuildSignableMessage(t *testing.T) {
 	payload := map[string]interface{}{
 		"currency":    "vUSDC",

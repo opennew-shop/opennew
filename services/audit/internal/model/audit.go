@@ -1,3 +1,6 @@
+// Package model 定义审计服务的数据模型与枚举常量：
+// 行为主体类型 (actor_type)、资源类型 (resource_type)、动作 (action) 等常量，
+// 以及映射 audit_log 不可变表的 AuditEvent 与查询/写入请求结构。
 package model
 
 import (

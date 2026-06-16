@@ -1,3 +1,6 @@
+// Package handler 实现 checkout 结算服务的 HTTP 接口层，
+// 负责 prepare/commit 两个端点的请求解析、必填字段校验、幂等键提取，
+// 以及将业务错误映射为合适的 HTTP 状态码。
 package handler
 
 import (

@@ -1,3 +1,6 @@
+// Package main 是 ANCF 审计服务 (Audit Service) 的入口。
+// 它装配 repository/service/handler 分层，注册管理端审计查询与记录路由，
+// 并启动 HTTP 服务；底层 audit_log 为 INSERT-only 的不可变审计日志。
 package main
 
 import (
@@ -18,6 +21,8 @@ import (
 	"github.com/ancf-commerce/ancf/services/audit/internal/service"
 )
 
+// main 初始化日志、数据库连接池与 Gin 路由，注册健康检查及管理端审计接口，
+// 以协程方式监听 HTTP 端口并在收到中断信号时优雅关闭。
 func main() {
 	// Structured JSON logger.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{

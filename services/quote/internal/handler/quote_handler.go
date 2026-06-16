@@ -1,3 +1,4 @@
+// Package handler 提供报价服务的 HTTP 接口,处理报价生成请求并做参数校验。
 package handler
 
 import (

@@ -1,3 +1,5 @@
+// Package repository 提供报价表(quotes)的数据访问。
+// 通过 SELECT FOR UPDATE 行锁与 consumed=FALSE 条件更新,防止报价被并发重复消费。
 package repository
 
 import (

@@ -15,6 +15,9 @@ import (
 // to Redis Streams. It implements the transactional outbox pattern:
 // events are inserted in the checkout commit transaction and become visible
 // to the processor only after the transaction commits.
+//
+// 中文说明：事务性 Outbox 处理器，轮询 outbox 表中的 pending 事件并发布到 Redis Streams；
+// 事件在 checkout commit 事务内写入，仅在事务提交后对处理器可见。
 type OutboxProcessor struct {
 	repo        *repository.OutboxRepository
 	db          *sql.DB

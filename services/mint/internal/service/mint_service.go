@@ -1,3 +1,8 @@
+// Package service 实现 mint 服务的业务逻辑层。
+// 它涵盖：铸币（充值确认→影子账本入账，9 状态状态机）、赎回（锁定余额→销毁→
+// 打款→失败释放，8 状态状态机），以及储备对账（校验
+// total_liability + pending_redemption <= confirmed_reserve 不变式）。
+// 配合 ledger 双分录服务、风控与储备覆盖检查以及 SERIALIZABLE 事务保证一致性。
 package service
 
 import (
@@ -157,37 +162,25 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 		return fmt.Errorf("confirm deposit: amount_minor must be > 0, got %d", amountMinor)
 	}
 
-	// Step 0: Idempotency check — same deposit_tx_id must only be processed once.
-	// This guard handles re-entrant calls from the chain-adapter's outbox deposit
-	// processor. The reserve_deposit_tx_id is the unique on-chain transaction hash.
-	existing, err := s.mintRepo.GetByDepositTxID(ctx, depositTxID)
-	if err != nil {
-		return fmt.Errorf("confirm deposit: idempotency check: %w", err)
-	}
-	if existing != nil {
-		// Already processed or in-flight. Return success for idempotency.
-		// Terminal states: credited, failed, cancelled — safe to return success.
-		// Non-terminal states (deposit_confirmed, risk_checking, approved, etc.)
-		// mean a prior call is still in progress — return an error so the caller
-		// can retry after the in-flight request completes.
-		terminalStatuses := map[string]bool{
-			model.MintStatusCredited:  true,
-			model.MintStatusFailed:    true,
-			model.MintStatusCancelled: true,
-		}
-		if terminalStatuses[existing.Status] {
-			return nil // idempotent: already fully processed.
-		}
-		return fmt.Errorf("confirm deposit: deposit_tx_id %s is currently being processed (status=%s), retry later",
-			depositTxID, existing.Status)
-	}
-
 	// Step 1: BEGIN TRANSACTION
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("confirm deposit: begin tx: %w", err)
 	}
 	defer tx.Rollback()
+
+	// Step 0: Idempotency check — same deposit_tx_id must only credit once.
+	existing, err := s.mintRepo.GetByDepositTxIDForUpdate(ctx, tx, depositTxID)
+	if err != nil {
+		return fmt.Errorf("confirm deposit: idempotency check: %w", err)
+	}
+	if existing != nil {
+		if existing.RequestID == requestID && existing.Status == model.MintStatusCredited {
+			return nil
+		}
+		return fmt.Errorf("confirm deposit: deposit_tx_id %s is already attached to request %s (status=%s)",
+			depositTxID, existing.RequestID, existing.Status)
+	}
 
 	// Step 2: Lock mint_request FOR UPDATE
 	locked, err := s.mintRepo.LockForUpdate(ctx, tx, requestID)
@@ -200,6 +193,42 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 		return fmt.Errorf("confirm deposit: invalid transition for %s (current=%s): %w", requestID, locked.Status, err)
 	}
 
+	asset, err := s.mintRepo.GetAssetByID(ctx, locked.AssetID)
+	if err != nil {
+		return fmt.Errorf("confirm deposit: asset lookup: %w", err)
+	}
+
+	reserve, err := s.mintRepo.GetReserveAccountForUpdate(ctx, tx, asset.Network, asset.Symbol)
+	if err != nil {
+		return fmt.Errorf("confirm deposit: reserve lookup: %w", err)
+	}
+
+	proof, err := s.mintRepo.GetFinalizedDepositProofForUpdate(ctx, tx, asset.Network, depositTxID)
+	if err != nil {
+		return fmt.Errorf("confirm deposit: chain proof: %w", err)
+	}
+	if proof.TxHash != depositTxID {
+		return fmt.Errorf("confirm deposit: proof tx mismatch: expected %s, got %s", depositTxID, proof.TxHash)
+	}
+	if proof.Network != asset.Network {
+		return fmt.Errorf("confirm deposit: proof network mismatch: expected %s, got %s", asset.Network, proof.Network)
+	}
+	if proof.AssetSymbol != asset.Symbol {
+		return fmt.Errorf("confirm deposit: proof asset mismatch: expected %s, got %s", asset.Symbol, proof.AssetSymbol)
+	}
+	if proof.AmountMinor != amountMinor {
+		return fmt.Errorf("confirm deposit: proof amount mismatch: expected %d, got %d", amountMinor, proof.AmountMinor)
+	}
+	if proof.ToAddress != reserve.Address {
+		return fmt.Errorf("confirm deposit: proof reserve address mismatch")
+	}
+	if proof.FromAddress != locked.Wallet {
+		return fmt.Errorf("confirm deposit: proof wallet mismatch: expected %s, got %s", locked.Wallet, proof.FromAddress)
+	}
+	if proof.DepositIntentID != requestID {
+		return fmt.Errorf("confirm deposit: proof deposit intent mismatch: expected %s, got %s", requestID, proof.DepositIntentID)
+	}
+
 	// If the amount was zero at intent creation, set it now.
 	// If it was pre-set, verify it matches.
 	if locked.AmountMinor == 0 {
@@ -207,16 +236,6 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 	} else if locked.AmountMinor != amountMinor {
 		return fmt.Errorf("confirm deposit: amount mismatch for %s: expected %d, got %d",
 			requestID, locked.AmountMinor, amountMinor)
-	}
-
-	// Update the deposit tx ID.
-	if err := s.mintRepo.UpdateDepositTxID(ctx, tx, requestID, depositTxID); err != nil {
-		return fmt.Errorf("confirm deposit: %w", err)
-	}
-
-	// Set status to deposit_confirmed.
-	if err := s.mintRepo.UpdateStatus(ctx, tx, requestID, model.MintStatusDepositConfirmed); err != nil {
-		return fmt.Errorf("confirm deposit: %w", err)
 	}
 
 	// Step 4: Get the mint policy for risk checking.
@@ -229,9 +248,23 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 
 	// Step 5: Risk check — validate against policy limits.
 	today := time.Now().UTC().Format("2006-01-02")
-	if err := s.mintRepo.CheckDailyLimit(ctx, locked.Wallet, amountMinor, today, policy); err != nil {
+	if err := s.mintRepo.CheckDailyLimitForUpdate(ctx, tx, locked.Wallet, amountMinor, today, policy); err != nil {
 		s.mintRepo.UpdateStatus(ctx, tx, requestID, model.MintStatusFailed)
 		return fmt.Errorf("confirm deposit: risk check failed: %w", err)
+	}
+
+	if err := s.mintRepo.CheckReserveCoverageForUpdate(ctx, tx, asset.Symbol, reserve, amountMinor); err != nil {
+		s.mintRepo.UpdateStatus(ctx, tx, requestID, model.MintStatusFailed)
+		return fmt.Errorf("confirm deposit: reserve check failed: %w", err)
+	}
+
+	if err := s.mintRepo.UpdateDepositDetails(ctx, tx, requestID, depositTxID, amountMinor); err != nil {
+		return fmt.Errorf("confirm deposit: %w", err)
+	}
+
+	// Set status to deposit_confirmed.
+	if err := s.mintRepo.UpdateStatus(ctx, tx, requestID, model.MintStatusDepositConfirmed); err != nil {
+		return fmt.Errorf("confirm deposit: %w", err)
 	}
 
 	// Transition to risk_checking (audit trail).
@@ -267,7 +300,7 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 	// Double entry:
 	//   debit  reserve_asset     / credit reserve_liability
 	//   debit  reserve_liability / credit user_available
-	currency := "vUSDC"
+	currency := asset.Symbol
 	if err := s.ledgerService.MintCredit(ctx, tx, locked.Wallet, amountMinor, currency, depositTxID); err != nil {
 		if statusErr := s.mintRepo.UpdateStatus(ctx, tx, requestID, model.MintStatusFailed); statusErr != nil {
 			return fmt.Errorf("confirm deposit: mint credit failed: %w; status update also failed: %v", err, statusErr)

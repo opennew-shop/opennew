@@ -6,6 +6,10 @@
 // HTTP to avoid pulling in a heavy Solana SDK dependency. Signing is delegated
 // to an external signer (KMS/HSM) via the Signer interface; a local keypair
 // signer is provided for development.
+//
+// 中文说明：本包实现 ANCF chain-adapter 的 Solana 链交互，覆盖 Token-2022 部署、
+// SPL Token 转账、多签治理、充值监听与供应量对账。Phase 4 采用原始 JSON-RPC over HTTP
+// 以避免引入重型 Solana SDK；签名经 Signer 接口委托外部签名器(KMS/HSM)，并提供本地开发签名器。
 package solana
 
 import (

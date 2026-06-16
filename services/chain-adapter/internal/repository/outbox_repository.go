@@ -14,6 +14,9 @@ import (
 // Events are inserted within the same database transaction as the business
 // operation (deposit detection). A separate deposit processor polls for
 // pending events and calls downstream services.
+//
+// 中文说明：chain-adapter 的 outbox 事件，与业务操作（充值检测）在同一事务内写入，
+// 由独立的 deposit 处理器轮询后调用下游服务，实现跨服务可靠事件投递。
 type OutboxEvent struct {
 	ID            int64           `json:"id"`
 	EventID       string          `json:"event_id"`

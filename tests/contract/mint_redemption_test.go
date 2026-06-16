@@ -125,7 +125,7 @@ func TestDepositIntentCreation(t *testing.T) {
 //   - Mint request transitions through states to "credited"
 func TestDepositConfirmationAndMintCredit(t *testing.T) {
 	t.Run("deposit confirmed and mint credit created", func(t *testing.T) {
-		// Simulate POST /api/v1/wallet/deposit-confirm.
+		// Simulate POST /api/v1/internal/deposit-confirm.
 		depositIntentID := "dep_mock_001"
 		depositTxID := "0xabcd1234ef567890"
 		amountMinor := int64(500000000) // 500 vUSDC.

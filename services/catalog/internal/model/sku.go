@@ -1,3 +1,5 @@
+// Package model 定义商品目录服务的领域模型与数据传输对象：SKU、搜索结果、价格展示、
+// 商品规格 / 媒体，以及兼容 pgvector 的向量类型 Vector。
 package model
 
 import (

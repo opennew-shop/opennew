@@ -1,3 +1,5 @@
+// Package handler 实现服务开通的 HTTP 接口层，
+// 提供管理端手动开通与状态查询，以及面向用户 (Agent) 的访问凭据获取端点。
 package handler
 
 import (

@@ -1,3 +1,6 @@
+// Package repository 提供 checkout 结算服务的数据访问层：
+// order_intents（订单意图）、idempotency_keys（幂等键）与 outbox（事件发件箱）三张表的操作，
+// 并封装行级锁（SELECT FOR UPDATE）和事务内幂等键的原子占用/保存等一致性原语。
 package repository
 
 import (
@@ -8,6 +11,7 @@ import (
 	"github.com/ancf-commerce/ancf/services/checkout/internal/model"
 )
 
+// 编译期断言：确保 *OrderRepository 实现了 OrderRepo 接口。
 // compile-time check: OrderRepository implements the OrderRepository interface.
 var _ OrderRepo = (*OrderRepository)(nil)
 
@@ -274,6 +278,7 @@ type IdempotencyConflictError struct {
 	Key string
 }
 
+// Error 返回幂等键冲突的错误描述，使 IdempotencyConflictError 实现 error 接口。
 func (e *IdempotencyConflictError) Error() string {
 	return fmt.Sprintf("idempotency key %s already exists (concurrent commit conflict)", e.Key)
 }

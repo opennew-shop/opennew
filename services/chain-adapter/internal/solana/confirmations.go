@@ -12,6 +12,10 @@
 //
 // These utilities are independent of the watcher and can be used by any
 // component that submits transactions to the Solana network.
+//
+// 中文说明：本文件提供生产级 Solana 交易确认跟踪、重试与超时处理——
+// 确认等级判定(confirmed=1 / finalized=32)、提交失败指数退避重试 3 次后标记失败、
+// 30s 未确认则提高优先费重发；与 watcher 解耦，可被任意发交易的组件复用。
 
 package solana
 
@@ -375,7 +379,7 @@ func (t *ConfirmationTracker) checkConfirmation(ctx context.Context, txHash stri
 	}
 
 	// Update the chain_txs record.
-	if err := t.chainRepo.UpdateConfirmations(ctx, txHash, int(confirmations), status); err != nil {
+	if err := t.chainRepo.UpdateConfirmations(ctx, string(model.NetworkSolanaMainnet), txHash, int(confirmations), status); err != nil {
 		t.logger.Warn("failed to update confirmations in DB",
 			"tx_hash", txHash,
 			"confirmations", confirmations,
@@ -385,7 +389,7 @@ func (t *ConfirmationTracker) checkConfirmation(ctx context.Context, txHash stri
 
 	// If finalized, mark it explicitly.
 	if status == model.TxStatusFinalized {
-		if err := t.chainRepo.MarkFinalized(ctx, txHash); err != nil {
+		if err := t.chainRepo.MarkFinalized(ctx, string(model.NetworkSolanaMainnet), txHash); err != nil {
 			t.logger.Warn("failed to mark tx as finalized",
 				"tx_hash", txHash,
 				"error", err,
@@ -557,7 +561,7 @@ func (m *TxTimeoutManager) handleTimeout(ctx context.Context, txHash string) {
 			"max_resubmissions", m.MaxResubmissions,
 		)
 		// Mark as failed in chain_txs.
-		_ = m.chainRepo.UpdateConfirmations(ctx, txHash, 0, model.TxStatusFailed)
+		_ = m.chainRepo.UpdateConfirmations(ctx, string(model.NetworkSolanaMainnet), txHash, 0, model.TxStatusFailed)
 		return
 	}
 	m.resubCounts[txHash] = count + 1
@@ -571,7 +575,7 @@ func (m *TxTimeoutManager) handleTimeout(ctx context.Context, txHash string) {
 		currentSlot, slotErr := m.rpcClient.GetSlot(ctx, "confirmed")
 		if slotErr == nil && currentSlot > parsedTx.Slot {
 			confirmations := int(currentSlot - parsedTx.Slot)
-			_ = m.chainRepo.UpdateConfirmations(ctx, txHash, confirmations, model.TxStatusConfirmed)
+			_ = m.chainRepo.UpdateConfirmations(ctx, string(model.NetworkSolanaMainnet), txHash, confirmations, model.TxStatusConfirmed)
 		}
 		m.mu.Lock()
 		delete(m.resubCounts, txHash)
@@ -710,7 +714,7 @@ func (b *ConfirmBatch) PollBatch(ctx context.Context, txHashes []string) ([]Batc
 		}
 
 		// Update DB.
-		if err := b.chainRepo.UpdateConfirmations(ctx, txHash, int(result.Confirmations), result.Status); err != nil {
+		if err := b.chainRepo.UpdateConfirmations(ctx, string(model.NetworkSolanaMainnet), txHash, int(result.Confirmations), result.Status); err != nil {
 			b.logger.Warn("failed to update confirmations in batch poll",
 				"tx_hash", txHash,
 				"error", err,
@@ -718,7 +722,7 @@ func (b *ConfirmBatch) PollBatch(ctx context.Context, txHashes []string) ([]Batc
 		}
 
 		if result.Status == model.TxStatusFinalized {
-			_ = b.chainRepo.MarkFinalized(ctx, txHash)
+			_ = b.chainRepo.MarkFinalized(ctx, string(model.NetworkSolanaMainnet), txHash)
 		}
 
 		results = append(results, result)

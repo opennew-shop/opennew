@@ -26,6 +26,9 @@ import (
 //   - The "Signature" header contains a valid base64-encoded signature.
 //   - The signature creation timestamp is within an acceptable window (5 minutes).
 //
+// 中文说明：按 RFC 9421 校验 HTTP 消息签名，检查 Signature-Input / Signature 头，
+// 验证覆盖组件、base64 签名有效性及签名时间戳是否在 5 分钟窗口内。
+//
 // In production, signature verification against known public keys would be required.
 // For Phase 1, it validates the structure and presence of required headers.
 func HTTPSignature() gin.HandlerFunc {

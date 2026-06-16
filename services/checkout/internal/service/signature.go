@@ -54,6 +54,9 @@ func BuildSignableMessage(payload map[string]interface{}) ([]byte, error) {
 //  5. Verifies the Ed25519 signature against the public key and message
 //
 // Returns true only if all steps succeed and the signature is valid.
+//
+// 中文说明：checkout commit 的完整 EdDSA(Ed25519) 验签：解码签名→从钱包地址推导公钥→
+// 解析 signable_payload 并按键排序构造规范消息("ANCF_CHECKOUT:{json}")→验签。
 func VerifyEdDSASignature(signablePayload json.RawMessage, walletAddr string, signatureB64 string) (bool, error) {
 	// Decode the base64 signature.
 	sigBytes, err := base64.StdEncoding.DecodeString(signatureB64)
@@ -98,6 +101,7 @@ func DerivePublicKey(walletAddr string) ([]byte, error) {
 
 	// SECURITY FIX: F-001-02 — Extended to support Solana base58 wallet addresses
 	// (32-44 chars = base58, 64-66 chars = hex including optional 0x prefix).
+	// 按地址长度启发式判别编码：32-44 视为 Solana base58，64-66 视为十六进制（可带 0x 前缀）。
 	switch {
 	case addrLen >= 32 && addrLen <= 44:
 		// Solana base58 encoded public key (usually 32-44 chars).

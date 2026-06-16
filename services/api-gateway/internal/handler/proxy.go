@@ -1,3 +1,5 @@
+// Package handler 实现 API 网关的 HTTP 处理器，包括健康检查、发现清单、
+// 商品检索（含混合检索与 RAG）以及向后端服务（开发期为 mock）转发请求的反向代理。
 package handler
 
 import (
@@ -64,6 +66,9 @@ func ReverseProxy(targetURL string) gin.HandlerFunc {
 		// Copy request headers (skip hop-by-hop headers)
 		for key, values := range c.Request.Header {
 			if isHopByHop(key) {
+				continue
+			}
+			if strings.EqualFold(key, "X-Internal-API-Key") {
 				continue
 			}
 			for _, value := range values {
@@ -182,13 +187,16 @@ func ProxyWithFallback(serviceURL, mockURL string) gin.HandlerFunc {
 				continue
 			}
 
-			for key, values := range c.Request.Header {
-				if isHopByHop(key) {
-					continue
-				}
-				for _, value := range values {
-					proxyReq.Header.Add(key, value)
-				}
+				for key, values := range c.Request.Header {
+					if isHopByHop(key) {
+						continue
+					}
+					if strings.EqualFold(key, "X-Internal-API-Key") {
+						continue
+					}
+					for _, value := range values {
+						proxyReq.Header.Add(key, value)
+					}
 			}
 			if clientIP := c.ClientIP(); clientIP != "" {
 				proxyReq.Header.Set("X-Forwarded-For", clientIP)

@@ -12,6 +12,9 @@ import (
 	"github.com/ancf-commerce/ancf/services/api-gateway/internal/config"
 )
 
+// rateLimitPrefix 是 Redis 中限流计数键的统一前缀；
+// rateLimitScript 是在 Redis 端原子执行的令牌桶 Lua 脚本：按经过时间补充令牌，
+// 消费一个令牌，超额时返回需等待的 TTL。
 const (
 	rateLimitPrefix = "ratelimit:"
 	rateLimitScript = `
@@ -149,16 +152,20 @@ func RateLimit(cfg *config.Config, redisClient *redis.Client) gin.HandlerFunc {
 
 // --- In-memory token bucket (local fallback) ---
 
+// tokenBucket 表示内存回退模式下单个客户端的令牌桶状态。
 type tokenBucket struct {
 	tokens     float64
 	lastRefill time.Time
 }
 
+// inMemoryBuckets 按客户端标识缓存内存令牌桶，bucketMutex 保护其并发访问。
 var (
 	inMemoryBuckets = make(map[string]*tokenBucket)
 	bucketMutex     sync.Mutex
 )
 
+// inMemoryRateLimit 是 Redis 不可用时的内存令牌桶回退实现，
+// 按经过时间补充令牌并尝试消费一个，返回是否放行及剩余令牌数。
 func inMemoryRateLimit(key string, rate float64, burst int) (allowed bool, remaining int) {
 	bucketMutex.Lock()
 	defer bucketMutex.Unlock()

@@ -1,3 +1,5 @@
+// Package repository 封装 catalog_skus 表的数据访问：全文检索、向量召回、混合检索（RRF 融合）、
+// 行级锁与库存增减，以及商品的增删改查与嵌入向量维护。
 package repository
 
 import (

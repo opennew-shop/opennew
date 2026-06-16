@@ -1,3 +1,5 @@
+// Package handler 实现审计服务的 HTTP 接口层，
+// 提供管理端审计日志的查询、按 ID 获取、最近事件列表与手动记录端点。
 package handler
 
 import (

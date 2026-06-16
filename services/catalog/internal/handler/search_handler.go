@@ -10,6 +10,7 @@ import (
 )
 
 // SearchHandler exposes the search endpoint for the catalog service.
+// catalog 服务的搜索接入层处理器，聚合普通检索、混合检索与 RAG 检索能力。
 type SearchHandler struct {
 	catalogService  *service.CatalogService
 	hybridService   *service.HybridSearchService

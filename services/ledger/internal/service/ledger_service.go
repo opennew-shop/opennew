@@ -1,3 +1,6 @@
+// Package service 提供双分录账本的业务逻辑层。
+// 所有 mutation 方法(PurchaseHold/Settle/Refund、MintCredit、RedemptionDebit/Release)
+// 需调用方传入 *sql.Tx 以保证与其他领域操作的原子性;读取方法在事务外执行。
 package service
 
 import (

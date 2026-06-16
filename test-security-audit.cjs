@@ -214,7 +214,7 @@ console.log('\n6. Deposit/Mint API — 未授权铸币');
 // ═══════════════════════════════════════════════
 {
   // Try to call deposit-confirm without valid intent
-  const r = await fetchJSON(API + '/api/v1/wallet/deposit-confirm', {
+  const r = await fetchJSON(API + '/api/v1/internal/deposit-confirm', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: { deposit_intent_id: 'FAKE_INTENT_HACK', deposit_tx_id: 'fake_tx' }
   });
