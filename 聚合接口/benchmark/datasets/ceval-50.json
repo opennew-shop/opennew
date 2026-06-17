@@ -1,0 +1,142 @@
+[
+  {
+    "question": "光的传播速度大约是？\nA.3×10^6m/s\nB.3×10^8m/s\nC.3×10^10m/s",
+    "answer": "B"
+  },
+  {
+    "question": "以下哪个不是温室气体？\nA.CO2\nB.CH4\nC.N2\nD.H2O",
+    "answer": "C"
+  },
+  {
+    "question": "DNA双螺旋结构谁提出？\nA.达尔文\nB.沃森和克里克\nC.孟德尔",
+    "answer": "B"
+  },
+  {
+    "question": "1牛顿=多少kg·m/s2？\nA.0.001\nB.0.01\nC.0.1\nD.1",
+    "answer": "D"
+  },
+  {
+    "question": "水的化学式？\nA.HO2\nB.H2O\nC.H2O2\nD.HO",
+    "answer": "B"
+  },
+  {
+    "question": "地球自转一周约多久？\nA.12小时\nB.24小时\nC.365天\nD.30天",
+    "answer": "B"
+  },
+  {
+    "question": "云计算服务模式不包括？\nA.IaaS\nB.PaaS\nC.SaaS\nD.DNS",
+    "answer": "D"
+  },
+  {
+    "question": "红楼梦的作者？\nA.施耐庵\nB.曹雪芹\nC.吴承恩\nD.罗贯中",
+    "answer": "B"
+  },
+  {
+    "question": "CPU意思是？\nA.中央处理器\nB.内存\nC.硬盘\nD.显卡",
+    "answer": "A"
+  },
+  {
+    "question": "以下哪个是强酸？\nA.HCl\nB.H2CO3\nC.HF\nD.H2SO3",
+    "answer": "A"
+  },
+  {
+    "question": "光合作用释放的气体？\nA.O2\nB.CO2\nC.N2\nD.H2",
+    "answer": "A"
+  },
+  {
+    "question": "TCP在OSI第几层？\nA.网络层\nB.传输层\nC.应用层\nD.链路层",
+    "answer": "B"
+  },
+  {
+    "question": "最长河流？\nA.长江\nB.亚马逊河\nC.尼罗河\nD.密西西比河",
+    "answer": "C"
+  },
+  {
+    "question": "AI分支？\nA.机器学习\nB.数据库\nC.网络协议\nD.OS",
+    "answer": "A"
+  },
+  {
+    "question": "typeof null返回？\nA.null\nB.undefined\nC.object\nD.boolean",
+    "answer": "C"
+  },
+  {
+    "question": "酸碱中和生成？\nA.盐+氢气\nB.盐+水\nC.盐+氧气\nD.酸+碱",
+    "answer": "B"
+  },
+  {
+    "question": "HTTP 404表示？\nA.成功\nB.未找到\nC.服务器错误\nD.重定向",
+    "answer": "B"
+  },
+  {
+    "question": "太阳系最大行星？\nA.土星\nB.木星\nC.海王星\nD.天王星",
+    "answer": "B"
+  },
+  {
+    "question": "相对论谁提出？\nA.波尔\nB.爱因斯坦\nC.海森堡\nD.薛定谔",
+    "answer": "B"
+  },
+  {
+    "question": "国际象棋棋盘几格？\nA.32\nB.48\nC.64\nD.100",
+    "answer": "C"
+  },
+  {
+    "question": "JSON全称？\nA.JavaScript Object Notation\nB.Java Online System",
+    "answer": "A"
+  },
+  {
+    "question": "维生素C缺什么病？\nA.夜盲症\nB.坏血病\nC.佝偻病\nD.脚气病",
+    "answer": "B"
+  },
+  {
+    "question": "RESTful GET作用？\nA.创建\nB.读取\nC.更新\nD.删除",
+    "answer": "B"
+  },
+  {
+    "question": "地壳最丰富元素？\nA.铁\nB.氧\nC.硅\nD.铝",
+    "answer": "B"
+  },
+  {
+    "question": "孙子兵法作者？\nA.孙膑\nB.孙武\nC.吴起\nD.韩信",
+    "answer": "B"
+  },
+  {
+    "question": "Docker不包括？\nA.镜像\nB.容器\nC.仓库\nD.虚拟机",
+    "answer": "D"
+  },
+  {
+    "question": "TCP第二次握手标志？\nA.SYN\nB.SYN+ACK\nC.ACK\nD.FIN",
+    "answer": "B"
+  },
+  {
+    "question": "水浒传好汉数？\nA.108\nB.36\nC.72\nD.128",
+    "answer": "A"
+  },
+  {
+    "question": "离太阳最近行星？\nA.金星\nB.水星\nC.火星\nD.地球",
+    "answer": "B"
+  },
+  {
+    "question": "数据库唯一标识记录？\nA.索引\nB.外键\nC.主键\nD.约束",
+    "answer": "C"
+  },
+  {
+    "question": "声音在空气速度约？\nA.3亿m/s\nB.340m/s\nC.1500m/s\nD.5000m/s",
+    "answer": "B"
+  },
+  {
+    "question": "JS不支持哪种范式？\nA.面向对象\nB.函数式\nC.面向过程\nD.逻辑式",
+    "answer": "D"
+  },
+  {
+    "question": "GDP中文含义？\nA.国民生产总值\nB.国内生产总值\nC.居民消费指数\nD.采购经理指数",
+    "answer": "B"
+  },
+  {
+    "question": "排序算法最低复杂度？\nA.冒泡\nB.插入\nC.快速\nD.选择",
+    "answer": "C"
+  },
+  {
+    "question": "区块链不可篡改性靠？\nA.加密\nB.哈希链\nC.共识\nD.以上都是",
+    "answer": "D"
+  }
+]
