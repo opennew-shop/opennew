@@ -180,8 +180,14 @@ const payloadSize = computed(() => {
 });
 
 function formatPrice(price: Price): string {
-  const value = Number(BigInt(price.amount_minor)) / 10 ** price.scale;
-  return `${value.toFixed(Math.min(price.scale, 6))} ${price.currency}`;
+  try {
+    const raw = String(price?.amount_minor ?? '0');
+    if (!/^\d+$/.test(raw)) return `— ${price?.currency || ''}`;
+    const value = Number(BigInt(raw)) / 10 ** price.scale;
+    return `${value.toFixed(Math.min(price.scale, 6))} ${price.currency}`;
+  } catch {
+    return `— ${price?.currency || ''}`;
+  }
 }
 
 function formatStock(stock?: number): string {

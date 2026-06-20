@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"sync"
 	"time"
 )
@@ -29,9 +30,10 @@ import (
 // 中文说明：2-of-3 多签配置。Threshold 固定为 2，Signers 为 3 个 base58 公钥，
 // PDA 为持有 vUSDC Token-2022 铸币权限的多签金库程序派生地址。
 type MultisigConfig struct {
-	Threshold uint8    `json:"threshold"` // Fixed at 2 for 2-of-3
-	Signers   [3]string `json:"signers"`  // 3 public key addresses (base58)
-	PDA       string    `json:"pda"`      // Multisig PDA address
+	Threshold   uint8     `json:"threshold"`    // Fixed at 2 for 2-of-3
+	Signers     [3]string `json:"signers"`      // 3 public key addresses (base58)
+	PDA         string    `json:"pda"`          // Multisig PDA address
+	MintAddress string    `json:"mint_address"` // vUSDC mint governed by this multisig
 }
 
 // Validate checks that the multisig configuration is consistent.
@@ -43,9 +45,17 @@ func (m *MultisigConfig) Validate() error {
 		if signer == "" {
 			return fmt.Errorf("multisig: signer %d is empty", i)
 		}
+		if _, err := decodeBase58Fixed(signer, 32); err != nil {
+			return fmt.Errorf("multisig: signer %d must be a base58 ed25519 public key: %w", i, err)
+		}
 	}
 	if m.PDA == "" {
 		return fmt.Errorf("multisig: PDA address is required")
+	}
+	if m.MintAddress != "" {
+		if _, err := decodeBase58Fixed(m.MintAddress, 32); err != nil {
+			return fmt.Errorf("multisig: mint address must be base58: %w", err)
+		}
 	}
 	return nil
 }
@@ -54,35 +64,36 @@ func (m *MultisigConfig) Validate() error {
 // Proposals are identified by a deterministic proposal ID derived from the
 // proposal data (amount, destination, nonce).
 type MultisigProposal struct {
-	ID           string            `json:"id"`
-	Proposer     string            `json:"proposer"`
-	Action       string            `json:"action"` // "mint", "burn", "freeze", "thaw", "transfer_mint_authority"
-	Amount       uint64            `json:"amount"`
-	DestAddress  string            `json:"dest_address,omitempty"`
-	MintAddress  string            `json:"mint_address"`
-	Nonce        uint64            `json:"nonce"`
-	Approvals    map[string]bool   `json:"approvals"` // signer -> approved
-	Status       string            `json:"status"`    // "pending", "approved", "executed", "rejected", "expired"
-	CreatedAt    time.Time         `json:"created_at"`
-	ExecutedAt   *time.Time        `json:"executed_at,omitempty"`
-	ExecutedTxID string            `json:"executed_tx_id,omitempty"`
+	ID           string          `json:"id"`
+	Proposer     string          `json:"proposer"`
+	Action       string          `json:"action"` // "mint", "burn", "freeze", "thaw", "transfer_mint_authority"
+	Amount       uint64          `json:"amount"`
+	DestAddress  string          `json:"dest_address,omitempty"`
+	MintAddress  string          `json:"mint_address"`
+	Nonce        uint64          `json:"nonce"`
+	Approvals    map[string]bool `json:"approvals"` // signer -> approved
+	Status       string          `json:"status"`    // "pending", "approved", "executed", "rejected", "expired"
+	CreatedAt    time.Time       `json:"created_at"`
+	ExecutedAt   *time.Time      `json:"executed_at,omitempty"`
+	ExecutedTxID string          `json:"executed_tx_id,omitempty"`
 }
 
 // Proposal status constants.
 const (
-	ProposalStatusPending  = "pending"
-	ProposalStatusApproved = "approved"
-	ProposalStatusExecuted = "executed"
-	ProposalStatusRejected = "rejected"
-	ProposalStatusExpired  = "expired"
+	ProposalStatusPending   = "pending"
+	ProposalStatusApproved  = "approved"
+	ProposalStatusExecuting = "executing"
+	ProposalStatusExecuted  = "executed"
+	ProposalStatusRejected  = "rejected"
+	ProposalStatusExpired   = "expired"
 )
 
 // Proposal action constants.
 const (
-	ProposalActionMint                = "mint"
-	ProposalActionBurn                = "burn"
-	ProposalActionFreeze              = "freeze"
-	ProposalActionThaw                = "thaw"
+	ProposalActionMint                  = "mint"
+	ProposalActionBurn                  = "burn"
+	ProposalActionFreeze                = "freeze"
+	ProposalActionThaw                  = "thaw"
 	ProposalActionTransferMintAuthority = "transfer_mint_authority"
 )
 
@@ -97,8 +108,9 @@ const (
 // Proposals are persisted in PostgreSQL so that state survives restarts
 // (SECURITY FIX: F-004-01).
 //
-// In the ANCF architecture, the multisig is the mint authority for the vUSDC
-// Token-2022 mint. All mint and burn operations require 2-of-3 approval.
+// In the Phase 4 on-chain architecture, the multisig is the mint authority for
+// the vUSDC Token-2022 mint. Shadow-ledger crediting is explicitly handled by
+// mint-service policy and does not claim multisig protection.
 //
 // Proposal lifecycle:
 //
@@ -150,9 +162,7 @@ func NewMultisigManagerWithDB(config *MultisigConfig, rpcEndpoint string, db *sq
 	// Restore proposals from DB on startup.
 	if db != nil {
 		if err := m.loadProposalsFromDB(context.Background()); err != nil {
-			m.logger.Warn("failed to load proposals from DB, starting with empty state",
-				"error", err,
-			)
+			return nil, fmt.Errorf("multisig: load proposals from DB: %w", err)
 		}
 	}
 
@@ -189,6 +199,53 @@ func (m *MultisigManager) isSigner(pubkey string) bool {
 		}
 	}
 	return false
+}
+
+const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+// decodeBase58Fixed decodes a Solana base58 public key and enforces its byte length.
+func decodeBase58Fixed(s string, wantLen int) ([]byte, error) {
+	result := big.NewInt(0)
+	base := big.NewInt(58)
+	for _, r := range s {
+		idx := -1
+		for i, a := range base58Alphabet {
+			if r == a {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return nil, fmt.Errorf("invalid base58 character %q", r)
+		}
+		result.Mul(result, base)
+		result.Add(result, big.NewInt(int64(idx)))
+	}
+
+	decoded := result.Bytes()
+	leadingZeros := 0
+	for leadingZeros < len(s) && s[leadingZeros] == '1' {
+		leadingZeros++
+	}
+	if leadingZeros > 0 {
+		decoded = append(make([]byte, leadingZeros), decoded...)
+	}
+	if len(decoded) != wantLen {
+		return nil, fmt.Errorf("decoded length %d, want %d", len(decoded), wantLen)
+	}
+	return decoded, nil
+}
+
+func canonicalApprovalMessage(proposalID string, proposal *MultisigProposal) []byte {
+	msg := fmt.Sprintf("%s|%s|%d|%s|%s|%d",
+		proposalID,
+		proposal.Action,
+		proposal.Amount,
+		proposal.DestAddress,
+		proposal.MintAddress,
+		proposal.Nonce,
+	)
+	return []byte(msg)
 }
 
 // CreateMultisig deploys a new multisig account on Solana.
@@ -273,9 +330,12 @@ func (m *MultisigManager) ProposeMint(ctx context.Context, proposer *Signer, amo
 	if destAddress == "" {
 		return "", fmt.Errorf("multisig: destination address is required")
 	}
+	if m.config.MintAddress == "" {
+		return "", fmt.Errorf("multisig: mint address is required in config")
+	}
 
 	nonce := m.nextNonce()
-	id := deriveProposalID(ProposalActionMint, amount, destAddress, "", nonce)
+	id := deriveProposalID(ProposalActionMint, amount, destAddress, m.config.MintAddress, nonce)
 
 	proposal := &MultisigProposal{
 		ID:          id,
@@ -283,6 +343,7 @@ func (m *MultisigManager) ProposeMint(ctx context.Context, proposer *Signer, amo
 		Action:      ProposalActionMint,
 		Amount:      amount,
 		DestAddress: destAddress,
+		MintAddress: m.config.MintAddress,
 		Nonce:       nonce,
 		Approvals:   make(map[string]bool),
 		Status:      ProposalStatusPending,
@@ -294,7 +355,9 @@ func (m *MultisigManager) ProposeMint(ctx context.Context, proposer *Signer, amo
 	m.mu.Unlock()
 
 	// SECURITY FIX: F-004-01 — Persist proposal to DB.
-	m.saveProposalToDB(ctx, proposal)
+	if err := m.saveProposalToDB(ctx, proposal); err != nil {
+		return "", err
+	}
 
 	m.logger.Info("mint proposal created",
 		"proposal_id", id,
@@ -311,7 +374,8 @@ func (m *MultisigManager) ProposeMint(ctx context.Context, proposer *Signer, amo
 // proposal. The caller MUST provide a valid EdDSA (Ed25519) signature over
 // the proposal details to prove possession of the signer's private key.
 //
-// The signed message is: SHA256(proposalID + "|" + action + "|" + amount + "|" + nonce)
+// The signed message is:
+// proposalID + "|" + action + "|" + amount + "|" + destAddress + "|" + mintAddress + "|" + nonce
 //
 // If the threshold (2) is reached, the proposal status transitions to
 // "approved" and is ready for execution.
@@ -335,9 +399,7 @@ func (m *MultisigManager) ApproveProposal(ctx context.Context, approver *Signer,
 	}
 
 	// Build the canonical message that the signer must have signed.
-	// Format: SHA256(proposalID + "|" + action + "|" + amount + "|" + nonce)
-	sigMsg := fmt.Sprintf("%s|%s|%d|%d", proposalID, proposal.Action, proposal.Amount, proposal.Nonce)
-	sigMsgHash := sha256.Sum256([]byte(sigMsg))
+	sigMsg := canonicalApprovalMessage(proposalID, proposal)
 
 	// Decode the base64 signature.
 	sigBytes, err := base64.StdEncoding.DecodeString(signatureB64)
@@ -346,15 +408,15 @@ func (m *MultisigManager) ApproveProposal(ctx context.Context, approver *Signer,
 		return fmt.Errorf("multisig: invalid signature encoding: %w", err)
 	}
 
-	// Derive the approver's Ed25519 public key from their hex-encoded public key.
-	approverPubKey, err := hex.DecodeString(approver.PublicKey)
+	// Derive the approver's Ed25519 public key from their Solana base58 public key.
+	approverPubKey, err := decodeBase58Fixed(approver.PublicKey, ed25519.PublicKeySize)
 	if err != nil {
 		m.mu.RUnlock()
 		return fmt.Errorf("multisig: invalid approver public key %s: %w", approver.PublicKey, err)
 	}
 
-	// Verify the EdDSA signature against the canonical message hash.
-	if !ed25519.Verify(approverPubKey, sigMsgHash[:], sigBytes) {
+	// Verify the EdDSA signature against the canonical message bytes.
+	if !ed25519.Verify(approverPubKey, sigMsg, sigBytes) {
 		m.mu.RUnlock()
 		return fmt.Errorf("multisig: signature verification failed for approver %s on proposal %s", approver.PublicKey, proposalID)
 	}
@@ -401,7 +463,9 @@ func (m *MultisigManager) ApproveProposal(ctx context.Context, approver *Signer,
 	}
 
 	// Persist to DB after state change.
-	m.saveProposalToDB(ctx, proposal)
+	if err := m.saveProposalToDB(ctx, proposal); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -434,11 +498,13 @@ func (m *MultisigManager) ExecuteProposal(ctx context.Context, executor *Signer,
 		return "", fmt.Errorf("multisig: proposal %s is in status %s (need approved)", proposalID, proposal.Status)
 	}
 
-	// Mark as executed atomically before the actual chain call to prevent
-	// double-execution. If the chain call fails, we revert.
-	proposal.Status = ProposalStatusExecuted
-	now := time.Now().UTC()
-	proposal.ExecutedAt = &now
+	// Mark as executing and persist before the actual chain call to prevent
+	// restart-time double execution.
+	proposal.Status = ProposalStatusExecuting
+	if err := m.saveProposalToDB(ctx, proposal); err != nil {
+		m.mu.Unlock()
+		return "", err
+	}
 	m.mu.Unlock()
 
 	m.logger.Info("executing proposal",
@@ -492,6 +558,7 @@ func (m *MultisigManager) ExecuteProposal(ctx context.Context, executor *Signer,
 		m.mu.Lock()
 		proposal.Status = ProposalStatusApproved
 		proposal.ExecutedAt = nil
+		persistErr := m.saveProposalToDB(ctx, proposal)
 		m.mu.Unlock()
 
 		m.logger.Error("proposal execution failed",
@@ -499,16 +566,23 @@ func (m *MultisigManager) ExecuteProposal(ctx context.Context, executor *Signer,
 			"action", proposal.Action,
 			"error", execErr,
 		)
+		if persistErr != nil {
+			return "", fmt.Errorf("multisig: execute proposal %s: %w; rollback persist failed: %v", proposalID, execErr, persistErr)
+		}
 		return "", fmt.Errorf("multisig: execute proposal %s: %w", proposalID, execErr)
 	}
 
-	// Record the tx signature.
+	// Record the tx signature and terminal state.
 	m.mu.Lock()
+	now := time.Now().UTC()
+	proposal.Status = ProposalStatusExecuted
+	proposal.ExecutedAt = &now
 	proposal.ExecutedTxID = txSig
+	if err := m.saveProposalToDB(ctx, proposal); err != nil {
+		m.mu.Unlock()
+		return "", err
+	}
 	m.mu.Unlock()
-
-	// SECURITY FIX: F-004-01 — Persist after execution.
-	m.saveProposalToDB(ctx, proposal)
 
 	m.logger.Info("proposal executed successfully",
 		"proposal_id", proposalID,
@@ -546,7 +620,7 @@ func (m *MultisigManager) ListPendingProposals() []*MultisigProposal {
 
 	var pending []*MultisigProposal
 	for _, p := range m.proposals {
-		if p.Status == ProposalStatusPending || p.Status == ProposalStatusApproved {
+		if p.Status == ProposalStatusPending || p.Status == ProposalStatusApproved || p.Status == ProposalStatusExecuting {
 			cp := *p
 			cp.Approvals = make(map[string]bool, len(p.Approvals))
 			for k, v := range p.Approvals {
@@ -586,7 +660,9 @@ func (m *MultisigManager) RejectProposal(ctx context.Context, signer *Signer, pr
 	proposal.Status = ProposalStatusRejected
 
 	// SECURITY FIX: F-004-01 — Persist rejection to DB.
-	m.saveProposalToDB(ctx, proposal)
+	if err := m.saveProposalToDB(ctx, proposal); err != nil {
+		return err
+	}
 
 	m.logger.Info("proposal rejected",
 		"proposal_id", proposalID,
@@ -637,7 +713,8 @@ CREATE TABLE IF NOT EXISTS multisig_proposals (
     mint_address    VARCHAR(88)  NOT NULL DEFAULT '',
     nonce           BIGINT       NOT NULL,
     approvals       JSONB        NOT NULL DEFAULT '{}',
-    status          VARCHAR(20)  NOT NULL DEFAULT 'pending',
+    status          VARCHAR(20)  NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'approved', 'executing', 'executed', 'rejected', 'expired')),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     executed_at     TIMESTAMPTZ,
     executed_tx_id  VARCHAR(200),
@@ -663,18 +740,14 @@ func (m *MultisigManager) EnsureProposalsTable(ctx context.Context) error {
 
 // saveProposalToDB upserts a single proposal into PostgreSQL. Called after
 // every state-changing operation (create, approve, execute, reject).
-func (m *MultisigManager) saveProposalToDB(ctx context.Context, proposal *MultisigProposal) {
+func (m *MultisigManager) saveProposalToDB(ctx context.Context, proposal *MultisigProposal) error {
 	if m.db == nil {
-		return // no-op when DB is not configured
+		return nil // no-op when DB is not configured
 	}
 
 	approvalsJSON, err := json.Marshal(proposal.Approvals)
 	if err != nil {
-		m.logger.Warn("failed to marshal approvals for DB persistence",
-			"proposal_id", proposal.ID,
-			"error", err,
-		)
-		return
+		return fmt.Errorf("multisig: marshal approvals for %s: %w", proposal.ID, err)
 	}
 
 	query := `
@@ -688,9 +761,15 @@ func (m *MultisigManager) saveProposalToDB(ctx context.Context, proposal *Multis
 			executed_at    = EXCLUDED.executed_at,
 			executed_tx_id = EXCLUDED.executed_tx_id,
 			updated_at     = NOW()
+		WHERE multisig_proposals.proposer = EXCLUDED.proposer
+		  AND multisig_proposals.action = EXCLUDED.action
+		  AND multisig_proposals.amount = EXCLUDED.amount
+		  AND multisig_proposals.dest_address = EXCLUDED.dest_address
+		  AND multisig_proposals.mint_address = EXCLUDED.mint_address
+		  AND multisig_proposals.nonce = EXCLUDED.nonce
 	`
 
-	_, err = m.db.ExecContext(ctx, query,
+	result, err := m.db.ExecContext(ctx, query,
 		proposal.ID,
 		proposal.Proposer,
 		proposal.Action,
@@ -705,11 +784,12 @@ func (m *MultisigManager) saveProposalToDB(ctx context.Context, proposal *Multis
 		proposal.ExecutedTxID,
 	)
 	if err != nil {
-		m.logger.Warn("failed to persist proposal to DB",
-			"proposal_id", proposal.ID,
-			"error", err,
-		)
+		return fmt.Errorf("multisig: persist proposal %s: %w", proposal.ID, err)
 	}
+	if n, err := result.RowsAffected(); err == nil && n == 0 {
+		return fmt.Errorf("multisig: proposal id collision for %s with different immutable fields", proposal.ID)
+	}
+	return nil
 }
 
 // loadProposalsFromDB restores all proposals from PostgreSQL into the in-memory

@@ -15,12 +15,12 @@ import (
 	"strconv"
 	"time"
 
-	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/internal/repository"
+	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/repository"
 	"github.com/ancf-commerce/ancf/services/checkout/internal/model"
 	"github.com/ancf-commerce/ancf/services/checkout/internal/repository"
-	quoteModel "github.com/ancf-commerce/ancf/services/quote/internal/model"
-	quoteRepo "github.com/ancf-commerce/ancf/services/quote/internal/repository"
-	quoteSvc "github.com/ancf-commerce/ancf/services/quote/internal/service"
+	quoteModel "github.com/ancf-commerce/ancf/services/quote/model"
+	quoteRepo "github.com/ancf-commerce/ancf/services/quote/repository"
+	quoteSvc "github.com/ancf-commerce/ancf/services/quote/service"
 )
 
 // CheckoutService provides business logic for the checkout prepare and commit flow.

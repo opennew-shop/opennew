@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -176,6 +177,7 @@ func main() {
 	if mintAddress == "" {
 		mintAddress = deriveMintAddress(multisigPDA)
 	}
+	multisigConfig.MintAddress = mintAddress
 
 	var txSig string
 	isDeployed := false
@@ -251,7 +253,7 @@ func main() {
 			}
 			return "PAYER_NOT_PROVIDED"
 		}(),
-		DryRun:  *dryRun,
+		DryRun:   *dryRun,
 		Warnings: warnings,
 	}
 
@@ -312,7 +314,7 @@ func resolveNetwork(flag string) string {
 }
 
 // loadKeypair 从 JSON 文件读取 Solana 密钥对（[u8; 64] 数组），
-// 拆分出后 32 字节公钥与前 32 字节私钥并以十六进制返回。
+// 公钥按 Solana 标准 base58 返回，私钥仅开发场景以十六进制保留。
 func loadKeypair(path string) (*solana.Signer, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -331,9 +333,37 @@ func loadKeypair(path string) (*solana.Signer, error) {
 	publicKey := keyBytes[32:]
 
 	return &solana.Signer{
-		PublicKey:  fmt.Sprintf("%x", publicKey),
+		PublicKey:  encodeBase58(publicKey),
 		PrivateKey: fmt.Sprintf("%x", privateKey),
 	}, nil
+}
+
+const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+func encodeBase58(data []byte) string {
+	x := new(big.Int).SetBytes(data)
+	base := big.NewInt(58)
+	zero := big.NewInt(0)
+	mod := new(big.Int)
+	var out []byte
+
+	for x.Cmp(zero) > 0 {
+		x.DivMod(x, base, mod)
+		out = append(out, base58Alphabet[mod.Int64()])
+	}
+	for _, b := range data {
+		if b != 0 {
+			break
+		}
+		out = append(out, base58Alphabet[0])
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	if len(out) == 0 {
+		return string(base58Alphabet[0])
+	}
+	return string(out)
 }
 
 // deriveMultisigPDA 由 3 个签名者公钥与阈值 2 确定性派生 2-of-3 多签 PDA 地址。

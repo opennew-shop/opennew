@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"time"
 
-	ledgersvc "github.com/ancf-commerce/ancf/services/ledger/internal/service"
+	ledgersvc "github.com/ancf-commerce/ancf/services/ledger/service"
 	"github.com/ancf-commerce/ancf/services/mint/internal/model"
 	"github.com/ancf-commerce/ancf/services/mint/internal/repository"
 )
@@ -94,9 +94,9 @@ func (s *MintService) CreateDepositIntent(ctx context.Context, req *model.Deposi
 	// Create the mint request with status=created and zero amount.
 	// The chain-adapter will update the amount when confirming the deposit.
 	mintReq := &model.MintRequest{
-		RequestID: depositIntentID,
-		Wallet:    req.Wallet,
-		AssetID:   asset.ID,
+		RequestID:   depositIntentID,
+		Wallet:      req.Wallet,
+		AssetID:     asset.ID,
 		AmountMinor: 0, // unknown until deposit confirmation
 		Status:      model.MintStatusCreated,
 	}
@@ -216,6 +216,15 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 	if proof.AssetSymbol != asset.Symbol {
 		return fmt.Errorf("confirm deposit: proof asset mismatch: expected %s, got %s", asset.Symbol, proof.AssetSymbol)
 	}
+	if asset.MintAddress == nil || *asset.MintAddress == "" {
+		return fmt.Errorf("confirm deposit: asset %s/%s has no configured mint address", asset.Network, asset.Symbol)
+	}
+	if proof.MintAddress == "" {
+		return fmt.Errorf("confirm deposit: proof missing mint address")
+	}
+	if proof.MintAddress != *asset.MintAddress {
+		return fmt.Errorf("confirm deposit: proof mint mismatch: expected %s, got %s", *asset.MintAddress, proof.MintAddress)
+	}
 	if proof.AmountMinor != amountMinor {
 		return fmt.Errorf("confirm deposit: proof amount mismatch: expected %d, got %d", amountMinor, proof.AmountMinor)
 	}
@@ -273,7 +282,9 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 	}
 
 	// Determine if manual approval is required.
-	// Shadow-ledger MVP: auto-approve everything below the manual-approval threshold.
+	// Shadow-ledger MVP: auto-approve below the manual-approval threshold and
+	// fail closed above it; the Phase 4 on-chain multisig path is not wired into
+	// this shadow-ledger credit path.
 	if amountMinor >= policy.RequireManualApprovalAboveMinor && policy.RequireManualApprovalAboveMinor > 0 {
 		// Large amount requires manual approval. In MVP, fail fast and require admin.
 		if err := s.mintRepo.UpdateStatus(ctx, tx, requestID, model.MintStatusFailed); err != nil {
@@ -322,13 +333,13 @@ func (s *MintService) ConfirmDeposit(ctx context.Context, requestID string, depo
 		ResourceType: "mint_request",
 		ResourceID:   requestID,
 		Action:       "confirm_deposit",
-		Details:      mustMarshalJSON(map[string]interface{}{
-			"wallet":          locked.Wallet,
-			"amount_minor":    amountMinor,
-			"currency":        currency,
-			"deposit_tx_id":   depositTxID,
-			"asset_id":        locked.AssetID,
-			"final_status":    model.MintStatusCredited,
+		Details: mustMarshalJSON(map[string]interface{}{
+			"wallet":        locked.Wallet,
+			"amount_minor":  amountMinor,
+			"currency":      currency,
+			"deposit_tx_id": depositTxID,
+			"asset_id":      locked.AssetID,
+			"final_status":  model.MintStatusCredited,
 		}),
 	}
 	if err := s.mintRepo.InsertAuditLog(ctx, tx, auditEvent); err != nil {

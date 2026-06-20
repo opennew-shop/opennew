@@ -15,8 +15,8 @@ import (
 // ChainHandler exposes HTTP endpoints for chain transaction queries,
 // reserve account lookups, and development simulation.
 type ChainHandler struct {
-	chainRepo          *repository.ChainRepository
-	simulateDepositFn  SimulateDepositFunc
+	chainRepo         *repository.ChainRepository
+	simulateDepositFn SimulateDepositFunc
 }
 
 // SimulateDepositFunc is the type for injecting a deposit simulator.
@@ -250,6 +250,7 @@ func (h *ChainHandler) ListReserveAccounts(c *gin.Context) {
 //	  "to_address": "RESERVE_WALLET_SOL_PLACEHOLDER",
 //	  "amount_minor": 50000000,
 //	  "asset_symbol": "vUSDC",
+//	  "mint_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 //	  "block_number": 999999
 //	}
 func (h *ChainHandler) SimulateDeposit(c *gin.Context) {
@@ -273,8 +274,10 @@ func (h *ChainHandler) SimulateDeposit(c *gin.Context) {
 		ToAddress       string `json:"to_address"`
 		AmountMinor     int64  `json:"amount_minor"`
 		AssetSymbol     string `json:"asset_symbol"`
+		MintAddress     string `json:"mint_address"`
 		DepositIntentID string `json:"deposit_intent_id"`
 		BlockNumber     int64  `json:"block_number"`
+		Confirmations   int    `json:"confirmations"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -322,8 +325,10 @@ func (h *ChainHandler) SimulateDeposit(c *gin.Context) {
 		ToAddress:       req.ToAddress,
 		AmountMinor:     req.AmountMinor,
 		AssetSymbol:     req.AssetSymbol,
+		MintAddress:     req.MintAddress,
 		DepositIntentID: req.DepositIntentID,
 		BlockNumber:     req.BlockNumber,
+		Confirmations:   req.Confirmations,
 		Timestamp:       time.Now().UTC(),
 	}
 
@@ -338,13 +343,13 @@ func (h *ChainHandler) SimulateDeposit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"status":  "deposit_simulated",
-		"network": event.Network,
-		"tx_hash": event.TxHash,
-		"amount_minor": event.AmountMinor,
-		"asset_symbol": event.AssetSymbol,
+		"status":            "deposit_simulated",
+		"network":           event.Network,
+		"tx_hash":           event.TxHash,
+		"amount_minor":      event.AmountMinor,
+		"asset_symbol":      event.AssetSymbol,
 		"deposit_intent_id": event.DepositIntentID,
-		"from_address": event.FromAddress,
-		"timestamp": event.Timestamp.UTC().Format(time.RFC3339),
+		"from_address":      event.FromAddress,
+		"timestamp":         event.Timestamp.UTC().Format(time.RFC3339),
 	})
 }

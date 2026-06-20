@@ -57,12 +57,12 @@ type SolanaDepositWatcher struct {
 	db         *sql.DB
 	outboxRepo *repository.OutboxRepository
 
-	mu         sync.RWMutex
-	lastSlot   uint64
-	lastSig    string              // before cursor for getSignaturesForAddress pagination
-	running    bool
-	cancelFn   context.CancelFunc
-	logger     *slog.Logger
+	mu       sync.RWMutex
+	lastSlot uint64
+	lastSig  string // before cursor for getSignaturesForAddress pagination
+	running  bool
+	cancelFn context.CancelFunc
+	logger   *slog.Logger
 }
 
 // DepositHandler is the callback invoked when a new deposit is detected on-chain.
@@ -90,7 +90,7 @@ func NewSolanaDepositWatcher(
 		wsURL:            wsURL,
 		reserveAddresses: reserveAddresses,
 		assetMints: map[string]string{
-			"USDC": USDCMainnetMint,
+			"USDC":  USDCMainnetMint,
 			"vUSDC": USDCMainnetMint,
 		},
 		handler:          handler,
@@ -123,6 +123,19 @@ func (w *SolanaDepositWatcher) SetMinConfirmations(n uint64) {
 	w.minConfirmations = n
 }
 
+// SetAssetMints replaces the mint whitelist used during deposit decoding.
+// The map key is the asset symbol configured for the reserve account, and the
+// value is the authoritative SPL/Token-2022 mint address expected on-chain.
+func (w *SolanaDepositWatcher) SetAssetMints(assetMints map[string]string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	copied := make(map[string]string, len(assetMints))
+	for symbol, mint := range assetMints {
+		copied[symbol] = mint
+	}
+	w.assetMints = copied
+}
+
 // IsRunning reports whether the watcher loop is active.
 func (w *SolanaDepositWatcher) IsRunning() bool {
 	w.mu.RLock()
@@ -135,6 +148,12 @@ func (w *SolanaDepositWatcher) LastSlot() uint64 {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.lastSlot
+}
+
+// ProcessDepositEvent exposes the same persistence path used by live polling.
+// It is used only by the development simulator when explicitly enabled.
+func (w *SolanaDepositWatcher) ProcessDepositEvent(ctx context.Context, event *model.DepositEvent) error {
+	return w.processEvent(ctx, event)
 }
 
 // Start begins the deposit watching loop. It initializes the starting slot
@@ -290,7 +309,7 @@ func (w *SolanaDepositWatcher) poll(ctx context.Context, rpcClient *RPCClient) {
 					"sig", event.TxHash,
 					"slot", event.BlockNumber,
 					"current_slot", currentSlot,
-					"confirmations", currentSlot - uint64(event.BlockNumber),
+					"confirmations", currentSlot-uint64(event.BlockNumber),
 					"required", w.minConfirmations,
 				)
 				// Leave lastSig unchanged so we re-process this on the next poll.
@@ -298,6 +317,7 @@ func (w *SolanaDepositWatcher) poll(ctx context.Context, rpcClient *RPCClient) {
 				// ChainRepository (GetByTxHash checks for existing).
 				continue
 			}
+			event.Confirmations = int(currentSlot - uint64(event.BlockNumber))
 
 			// Process the event.
 			if err := w.processEvent(ctx, event); err != nil {
@@ -439,6 +459,7 @@ func (w *SolanaDepositWatcher) decodeSPLTransfer(
 				ToAddress:       reserveAddr,
 				AmountMinor:     int64(amount),
 				AssetSymbol:     assetSymbol,
+				MintAddress:     postBal.Mint,
 				DepositIntentID: parseDepositIntentMemo(memo, assetSymbol),
 				BlockNumber:     int64(tx.Slot),
 				Timestamp:       eventTime,
@@ -491,8 +512,11 @@ func (w *SolanaDepositWatcher) processEvent(ctx context.Context, event *model.De
 		TxHash:        event.TxHash,
 		TxType:        model.TxTypeDeposit,
 		Status:        model.TxStatusFinalized,
-		Confirmations: int(w.minConfirmations),
+		Confirmations: event.Confirmations,
 		RawJSON:       rawJSON,
+	}
+	if chainTx.Confirmations <= 0 {
+		chainTx.Confirmations = int(w.minConfirmations)
 	}
 
 	if w.db != nil && w.outboxRepo != nil {
@@ -578,8 +602,10 @@ func marshalOutboxPayload(event *model.DepositEvent) []byte {
 		ToAddress       string `json:"to_address"`
 		AmountMinor     int64  `json:"amount_minor"`
 		AssetSymbol     string `json:"asset_symbol"`
+		MintAddress     string `json:"mint_address"`
 		DepositIntentID string `json:"deposit_intent_id,omitempty"`
 		BlockNumber     int64  `json:"block_number"`
+		Confirmations   int    `json:"confirmations"`
 	}
 	data, err := json.Marshal(depositPayload{
 		Network:         event.Network,
@@ -588,8 +614,10 @@ func marshalOutboxPayload(event *model.DepositEvent) []byte {
 		ToAddress:       event.ToAddress,
 		AmountMinor:     event.AmountMinor,
 		AssetSymbol:     event.AssetSymbol,
+		MintAddress:     event.MintAddress,
 		DepositIntentID: event.DepositIntentID,
 		BlockNumber:     event.BlockNumber,
+		Confirmations:   event.Confirmations,
 	})
 	if err != nil {
 		return []byte("{}")

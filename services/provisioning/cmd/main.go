@@ -13,10 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 
-	ledgerRepo "github.com/ancf-commerce/ancf/services/ledger/internal/repository"
+	ledgerRepo "github.com/ancf-commerce/ancf/services/ledger/repository"
 	"github.com/ancf-commerce/ancf/services/provisioning/internal/handler"
 	"github.com/ancf-commerce/ancf/services/provisioning/internal/repository"
 	"github.com/ancf-commerce/ancf/services/provisioning/internal/service"
@@ -100,7 +100,7 @@ func main() {
 			"version":   "0.1.0",
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"checks": gin.H{
-				"database": "connected",
+				"database":        "connected",
 				"outbox_listener": "running",
 			},
 		})

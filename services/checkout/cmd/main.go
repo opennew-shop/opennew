@@ -16,12 +16,12 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 
-	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/internal/repository"
+	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/repository"
 	"github.com/ancf-commerce/ancf/services/checkout/internal/handler"
 	"github.com/ancf-commerce/ancf/services/checkout/internal/repository"
 	"github.com/ancf-commerce/ancf/services/checkout/internal/service"
-	quoteRepo "github.com/ancf-commerce/ancf/services/quote/internal/repository"
-	quoteSvc "github.com/ancf-commerce/ancf/services/quote/internal/service"
+	quoteRepo "github.com/ancf-commerce/ancf/services/quote/repository"
+	quoteSvc "github.com/ancf-commerce/ancf/services/quote/service"
 )
 
 // main 启动 checkout 服务：读取环境配置、连接并校验 PostgreSQL、配置连接池、

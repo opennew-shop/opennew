@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	ledgerModel "github.com/ancf-commerce/ancf/services/ledger/internal/model"
-	ledgerRepo "github.com/ancf-commerce/ancf/services/ledger/internal/repository"
+	ledgerModel "github.com/ancf-commerce/ancf/services/ledger/model"
+	ledgerRepo "github.com/ancf-commerce/ancf/services/ledger/repository"
 	"github.com/ancf-commerce/ancf/services/provisioning/internal/model"
 	"github.com/ancf-commerce/ancf/services/provisioning/internal/repository"
 )
@@ -25,8 +25,8 @@ import (
 // It listens for order_committed outbox events and asynchronously provisions
 // the associated services (compute rental, storage, API keys).
 type ProvisioningService struct {
-	db       *sql.DB
-	repo     *repository.ProvisioningRepository
+	db         *sql.DB
+	repo       *repository.ProvisioningRepository
 	ledgerRepo *ledgerRepo.LedgerRepository
 }
 
@@ -122,7 +122,7 @@ func (s *ProvisioningService) HandleOrderCommitted(ctx context.Context, evt *mod
 		"wallet":          provReq.Wallet,
 		"total_minor":     provReq.TotalMinor,
 		"currency":        provReq.Currency,
-		"phase":          "transitioning_to_provisioning",
+		"phase":           "transitioning_to_provisioning",
 	})
 	auditEvt := &model.AuditEvent{
 		EventID:      auditEventID,
@@ -185,14 +185,14 @@ func (s *ProvisioningService) ProvisionSKU(ctx context.Context, skuID string, or
 		result.AccessToken = &accessToken
 		result.EndpointURL = &endpointURL
 		result.Details, _ = json.Marshal(map[string]interface{}{
-			"sku_id":       skuID,
-			"instance_id":  instanceID,
+			"sku_id":        skuID,
+			"instance_id":   instanceID,
 			"instance_type": skuID,
-			"region":       "us-east-1",
-			"status":       "running",
-			"cpu_count":    16,
-			"memory_gb":    64,
-			"gpu_count":    1,
+			"region":        "us-east-1",
+			"status":        "running",
+			"cpu_count":     16,
+			"memory_gb":     64,
+			"gpu_count":     1,
 		})
 
 		log.Printf("[provisioning] compute rental %s provisioned: instance=%s, intent=%s", skuID, instanceID, orderIntentID)
@@ -207,11 +207,11 @@ func (s *ProvisioningService) ProvisionSKU(ctx context.Context, skuID string, or
 		result.AccessToken = &accessToken
 		result.EndpointURL = &endpointURL
 		result.Details, _ = json.Marshal(map[string]interface{}{
-			"sku_id":      skuID,
-			"bucket_id":   bucketID,
-			"storage_gb":  1000,
-			"region":      "us-east-1",
-			"redundancy":  "triple",
+			"sku_id":     skuID,
+			"bucket_id":  bucketID,
+			"storage_gb": 1000,
+			"region":     "us-east-1",
+			"redundancy": "triple",
 		})
 
 		log.Printf("[provisioning] storage allocation %s provisioned: bucket=%s, intent=%s", skuID, bucketID, orderIntentID)
@@ -267,6 +267,9 @@ func (s *ProvisioningService) finalizeProvisioningSuccess(ctx context.Context, i
 	settleEntries := ledgerModel.PurchaseSettle(txID, wallet, totalMinor, currency, intentID)
 	for i := range settleEntries {
 		settleEntries[i].EntryID = generateID("entry_")
+	}
+	if !ledgerModel.ValidateBalance(settleEntries) {
+		return fmt.Errorf("finalize success: invalid ledger settle entries for %s", intentID)
 	}
 	if err := s.ledgerRepo.PostTransaction(ctx, tx, settleEntries); err != nil {
 		return fmt.Errorf("finalize success: ledger settle for %s: %w", intentID, err)
@@ -330,6 +333,9 @@ func (s *ProvisioningService) finalizeProvisioningFailure(ctx context.Context, i
 	refundEntries := ledgerModel.PurchaseRefund(txID, wallet, totalMinor, currency, intentID)
 	for i := range refundEntries {
 		refundEntries[i].EntryID = generateID("entry_")
+	}
+	if !ledgerModel.ValidateBalance(refundEntries) {
+		return fmt.Errorf("finalize failure: invalid ledger refund entries for %s", intentID)
 	}
 	if err := s.ledgerRepo.PostTransaction(ctx, tx, refundEntries); err != nil {
 		return fmt.Errorf("finalize failure: ledger refund for %s: %w", intentID, err)
@@ -396,12 +402,6 @@ func (s *ProvisioningService) ManualProvision(ctx context.Context, intentID stri
 	}
 
 	// Execute provisioning.
-	provReq := model.ProvisioningRequest{
-		OrderIntentID: intent.IntentID,
-		Wallet:        intent.Wallet,
-		TotalMinor:    intent.TotalMinor,
-		Currency:      intent.Currency,
-	}
 	skuID := determineSKUFromIntentRow(intent)
 	result := s.ProvisionSKU(ctx, skuID, intentID)
 

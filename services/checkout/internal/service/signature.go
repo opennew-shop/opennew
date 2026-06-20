@@ -137,7 +137,6 @@ func base58Decode(encoded string) ([]byte, error) {
 		charIndex[base58Alphabet[i]] = i
 	}
 
-	zero := big.NewInt(0)
 	fiftyEight := big.NewInt(58)
 
 	result := big.NewInt(0)

@@ -5,8 +5,8 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 
@@ -60,7 +60,7 @@ func (s *LedgerService) PurchaseHold(ctx context.Context, tx *sql.Tx, wallet str
 	for i := range entries {
 		entries[i].EntryID = generateID("entry_")
 	}
-	return s.repo.PostTransaction(ctx, tx, entries)
+	return s.postValidated(ctx, tx, entries)
 }
 
 // PurchaseSettle moves funds from pending to settled after a successful
@@ -85,7 +85,7 @@ func (s *LedgerService) PurchaseSettle(ctx context.Context, tx *sql.Tx, wallet s
 	for i := range entries {
 		entries[i].EntryID = generateID("entry_")
 	}
-	return s.repo.PostTransaction(ctx, tx, entries)
+	return s.postValidated(ctx, tx, entries)
 }
 
 // PurchaseRefund returns held funds to the user's available balance.
@@ -110,7 +110,7 @@ func (s *LedgerService) PurchaseRefund(ctx context.Context, tx *sql.Tx, wallet s
 	for i := range entries {
 		entries[i].EntryID = generateID("entry_")
 	}
-	return s.repo.PostTransaction(ctx, tx, entries)
+	return s.postValidated(ctx, tx, entries)
 }
 
 // MintCredit credits vUSDC to a user after a confirmed reserve deposit.
@@ -138,7 +138,7 @@ func (s *LedgerService) MintCredit(ctx context.Context, tx *sql.Tx, wallet strin
 	for i := range entries {
 		entries[i].EntryID = generateID("entry_")
 	}
-	return s.repo.PostTransaction(ctx, tx, entries)
+	return s.postValidated(ctx, tx, entries)
 }
 
 // RedemptionDebit processes a vUSDC redemption, debiting the user's available
@@ -167,7 +167,7 @@ func (s *LedgerService) RedemptionDebit(ctx context.Context, tx *sql.Tx, wallet 
 	for i := range entries {
 		entries[i].EntryID = generateID("entry_")
 	}
-	return s.repo.PostTransaction(ctx, tx, entries)
+	return s.postValidated(ctx, tx, entries)
 }
 
 // RedemptionRelease releases locked redemption funds back to the user's available
@@ -195,6 +195,13 @@ func (s *LedgerService) RedemptionRelease(ctx context.Context, tx *sql.Tx, walle
 	entries := model.RedemptionRelease(txID, wallet, amountMinor, currency, redemptionID)
 	for i := range entries {
 		entries[i].EntryID = generateID("entry_")
+	}
+	return s.postValidated(ctx, tx, entries)
+}
+
+func (s *LedgerService) postValidated(ctx context.Context, tx *sql.Tx, entries []model.LedgerEntry) error {
+	if !model.ValidateBalance(entries) {
+		return fmt.Errorf("ledger: invalid unbalanced transaction")
 	}
 	return s.repo.PostTransaction(ctx, tx, entries)
 }

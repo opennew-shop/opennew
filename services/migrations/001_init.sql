@@ -340,7 +340,7 @@ CREATE INDEX idx_outbox_event_type ON outbox(event_type);
 -- Insert default assets
 -- ----------------------------------------------------------------------------
 INSERT INTO assets (symbol, decimals, asset_type, network, mint_address, status) VALUES
-    ('vUSDC', 6, 'shadow-ledger', 'solana-mainnet', NULL, 'active'),
+    ('vUSDC', 6, 'shadow-ledger', 'solana-mainnet', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'active'),
     ('vUSDC', 6, 'shadow-ledger', 'sonic-l2', NULL, 'active');
 
 -- Insert default vUSDC reserve accounts (placeholder addresses)

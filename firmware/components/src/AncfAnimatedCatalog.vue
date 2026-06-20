@@ -94,7 +94,15 @@
         >
           <!-- GPU 缩略图 -->
           <div class="card-media">
-            <div class="media-placeholder" :style="{ background: chipGradient(idx) }">
+            <img
+              v-if="mediaThumbnail(item) && !failedImages[item.sku_id]"
+              class="media-image"
+              :src="mediaThumbnail(item)"
+              :alt="item.title"
+              loading="lazy"
+              @error="markImageFailed(item.sku_id)"
+            />
+            <div v-else class="media-placeholder" :style="{ background: chipGradient(idx) }">
               <span class="media-chip">{{ item.specs?.GPU?.split(' ')[0] || item.sku_id.slice(-4).toUpperCase() }}</span>
               <div class="media-shimmer"></div>
             </div>
@@ -184,6 +192,7 @@ const selectedIndex = ref(-1)
 const activeCategory = ref('')
 const showResults = ref(false)
 const searchInput = ref(null)
+const failedImages = ref({})
 
 const categories = ref([
   { key: 'gpu', icon: '⚡', label: 'GPU Compute', count: 3 },
@@ -299,6 +308,17 @@ function stockLabel(stock) {
   return `${stock} left`
 }
 
+function mediaThumbnail(item) {
+  const media = item?.media || {}
+  if (typeof media.thumbnail === 'string' && media.thumbnail) return media.thumbnail
+  if (Array.isArray(media.gallery)) return media.gallery.find(Boolean) || ''
+  return ''
+}
+
+function markImageFailed(skuID) {
+  failedImages.value = { ...failedImages.value, [skuID]: true }
+}
+
 function chipGradient(idx) {
   const gradients = [
     'linear-gradient(135deg, #1a3a2a 0%, #0d2818 100%)',
@@ -407,6 +427,10 @@ onMounted(() => {
 
 /* Card media */
 .card-media { position: relative; height: 100px; overflow: hidden; }
+.media-image {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  background: #111827;
+}
 .media-placeholder {
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
   position: relative;

@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"time"
 
+	ledgerSvc "github.com/ancf-commerce/ancf/services/ledger/service"
 	"github.com/ancf-commerce/ancf/services/mint/internal/model"
 	"github.com/ancf-commerce/ancf/services/mint/internal/repository"
-	ledgerSvc "github.com/ancf-commerce/ancf/services/ledger/internal/service"
 
 	// Outbox repository for cross-service event publishing.
-	outboxRepo "github.com/ancf-commerce/ancf/services/chain-adapter/internal/repository"
+	outboxRepo "github.com/ancf-commerce/ancf/services/chain-adapter/repository"
 )
 
 // RedemptionService provides the business-logic layer for vUSDC redemption operations.

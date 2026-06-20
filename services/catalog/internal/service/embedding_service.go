@@ -26,7 +26,7 @@ type EmbeddingProvider interface {
 // EmbeddingService manages embedding generation and storage for catalog SKUs.
 // It wraps an EmbeddingProvider and a repository for database persistence.
 type EmbeddingService struct {
-	Provider EmbeddingProvider    // exported for direct access by HybridSearchService
+	Provider EmbeddingProvider // exported for direct access by HybridSearchService
 	repo     EmbeddingRepository
 }
 
@@ -41,7 +41,7 @@ type EmbeddingRepository interface {
 // NewEmbeddingService creates a new EmbeddingService.
 func NewEmbeddingService(provider EmbeddingProvider, repo EmbeddingRepository) *EmbeddingService {
 	return &EmbeddingService{
-		provider: provider,
+		Provider: provider,
 		repo:     repo,
 	}
 }

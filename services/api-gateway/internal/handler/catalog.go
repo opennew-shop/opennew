@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ancf-commerce/ancf/services/catalog/internal/service"
+	"github.com/ancf-commerce/ancf/services/catalog/service"
 )
 
 // CatalogSearchHandler exposes the catalog search endpoint from the API gateway.

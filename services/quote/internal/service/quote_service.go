@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/internal/repository"
+	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/repository"
 	"github.com/ancf-commerce/ancf/services/quote/internal/model"
 	"github.com/ancf-commerce/ancf/services/quote/internal/repository"
 )

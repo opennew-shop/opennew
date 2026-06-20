@@ -176,7 +176,7 @@ paths:
                       GPU: "80GB SXM5"
                       CUDA: "12.4"
                     media:
-                      thumbnail: "https://cdn.yourshop.com/h100.png"
+                      thumbnail: "https://opennew.shop/assets/products/h100.svg"
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":

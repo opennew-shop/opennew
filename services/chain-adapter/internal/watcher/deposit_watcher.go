@@ -30,12 +30,12 @@ type DepositEventHandler interface {
 // logic (transaction parsing, address filtering) is delegated to the
 // concrete watcher implementations (SolanaDepositWatcher, etc.).
 type DepositWatcher struct {
-	Network         model.Network
-	RpcEndpoint     string
+	Network          model.Network
+	RpcEndpoint      string
 	ReserveAddresses map[string]string // assetSymbol -> address
-	ChainRepo       *repository.ChainRepository
-	EventHandler    DepositEventHandler
-	PollInterval    time.Duration
+	ChainRepo        *repository.ChainRepository
+	EventHandler     DepositEventHandler
+	PollInterval     time.Duration
 
 	// Outbox support: when DB and OutboxRepo are set, processEvent writes
 	// deposit_detected events to the outbox table within the same DB
@@ -58,15 +58,15 @@ func NewDepositWatcher(
 	handler DepositEventHandler,
 ) *DepositWatcher {
 	return &DepositWatcher{
-		Network:         network,
-		RpcEndpoint:     rpcEndpoint,
+		Network:          network,
+		RpcEndpoint:      rpcEndpoint,
 		ReserveAddresses: reserveAddresses,
-		ChainRepo:       chainRepo,
-		EventHandler:    handler,
-		PollInterval:    10 * time.Second,
-		lastBlock:       0,
-		running:         false,
-		logger:          slog.Default().With("component", "deposit-watcher", "network", string(network)),
+		ChainRepo:        chainRepo,
+		EventHandler:     handler,
+		PollInterval:     10 * time.Second,
+		lastBlock:        0,
+		running:          false,
+		logger:           slog.Default().With("component", "deposit-watcher", "network", string(network)),
 	}
 }
 
@@ -175,12 +175,16 @@ func (w *DepositWatcher) processEvent(ctx context.Context, event *model.DepositE
 
 	// 2. Save to chain_txs, with outbox event in same transaction when configured.
 	rawJSON, _ := json.Marshal(event)
+	confirmations := event.Confirmations
+	if confirmations <= 0 {
+		confirmations = 32
+	}
 	chainTx := &model.ChainTx{
 		Network:       event.Network,
 		TxHash:        event.TxHash,
 		TxType:        model.TxTypeDeposit,
 		Status:        model.TxStatusFinalized,
-		Confirmations: 32,
+		Confirmations: confirmations,
 		RawJSON:       rawJSON,
 	}
 
@@ -271,8 +275,10 @@ func mustMarshalOutboxPayload(event *model.DepositEvent) []byte {
 		ToAddress       string `json:"to_address"`
 		AmountMinor     int64  `json:"amount_minor"`
 		AssetSymbol     string `json:"asset_symbol"`
+		MintAddress     string `json:"mint_address"`
 		DepositIntentID string `json:"deposit_intent_id,omitempty"`
 		BlockNumber     int64  `json:"block_number"`
+		Confirmations   int    `json:"confirmations"`
 	}
 	data, err := json.Marshal(depositPayload{
 		Network:         event.Network,
@@ -281,8 +287,10 @@ func mustMarshalOutboxPayload(event *model.DepositEvent) []byte {
 		ToAddress:       event.ToAddress,
 		AmountMinor:     event.AmountMinor,
 		AssetSymbol:     event.AssetSymbol,
+		MintAddress:     event.MintAddress,
 		DepositIntentID: event.DepositIntentID,
 		BlockNumber:     event.BlockNumber,
+		Confirmations:   event.Confirmations,
 	})
 	if err != nil {
 		return []byte("{}")

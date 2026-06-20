@@ -25,7 +25,15 @@
       <!-- Hero 区 -->
       <header class="detail-hero">
         <div class="hero-media">
-          <div class="gpu-visual" :style="{ background: heroGradient }">
+          <img
+            v-if="heroImage && !heroImageFailed"
+            class="hero-image"
+            :src="heroImage"
+            :alt="product.title"
+            loading="eager"
+            @error="heroImageFailed = true"
+          />
+          <div v-else class="gpu-visual" :style="{ background: heroGradient }">
             <div class="gpu-core">
               <span class="gpu-label">{{ chipLabel }}</span>
               <div class="gpu-rings">
@@ -174,6 +182,7 @@ const quoteExpired = ref(false)
 const timeRemaining = ref('')
 const error = ref('')
 const loading = ref(false)
+const heroImageFailed = ref(false)
 let expiryTimer = null
 
 // ---- Computed ----
@@ -182,7 +191,13 @@ const qtyChanged = computed(() => qty.value !== 1)
 const totalPrice = computed(() => {
   if (!props.product?.price) return { currency: 'vUSDC', amount_minor: '0', scale: 6 }
   const p = props.product.price
-  return { ...p, amount_minor: String(BigInt(p.amount_minor) * BigInt(qty.value)) }
+  try {
+    const raw = String(p.amount_minor ?? '0')
+    if (!/^\d+$/.test(raw)) return { ...p, amount_minor: '0' }
+    return { ...p, amount_minor: String(BigInt(raw) * BigInt(qty.value)) }
+  } catch {
+    return { ...p, amount_minor: '0' }
+  }
 })
 
 const quoteUrgent = computed(() => {
@@ -195,6 +210,16 @@ const chipLabel = computed(() => {
   if (!props.product) return ''
   return props.product.specs?.GPU?.split(' ')[0] || props.product.sku_id?.slice(-4).toUpperCase() || 'GPU'
 })
+
+const gallery = computed(() => {
+  const media = props.product?.media || {}
+  const images = Array.isArray(media.gallery) && media.gallery.length
+    ? media.gallery
+    : (media.thumbnail ? [media.thumbnail] : [])
+  return images.filter(Boolean)
+})
+
+const heroImage = computed(() => gallery.value[0] || '')
 
 const heroGradient = computed(() => {
   const gradients = [
@@ -209,13 +234,19 @@ const heroGradient = computed(() => {
 // ---- Methods ----
 function formatPrice(price) {
   if (!price) return '—'
-  const major = parseInt(price.amount_minor) / Math.pow(10, price.scale || 6)
-  return `${major.toFixed(price.scale || 6)} ${price.currency || 'vUSDC'}`
+  const raw = String(price.amount_minor ?? '0')
+  if (!/^\d+$/.test(raw)) return `— ${price.currency || 'vUSDC'}`
+  const scale = Number.isInteger(price.scale) ? price.scale : 6
+  const major = Number(BigInt(raw)) / Math.pow(10, scale)
+  return `${major.toFixed(Math.min(scale, 6))} ${price.currency || 'vUSDC'}`
 }
 
 function formatMinor(minor, scale = 6) {
-  const major = parseInt(minor) / Math.pow(10, scale)
-  return major.toFixed(Math.min(scale, 4))
+  const raw = String(minor ?? '0')
+  if (!/^\d+$/.test(raw)) return '—'
+  const safeScale = Number.isInteger(scale) ? scale : 6
+  const major = Number(BigInt(raw)) / Math.pow(10, safeScale)
+  return major.toFixed(Math.min(safeScale, 4))
 }
 
 function stockClass(stock) {
@@ -314,6 +345,7 @@ watch(() => props.product, () => {
   quoteResult.value = null
   quoteExpired.value = false
   error.value = ''
+  heroImageFailed.value = false
   clearInterval(expiryTimer)
 })
 
@@ -360,6 +392,10 @@ onUnmounted(() => clearInterval(expiryTimer))
   border-radius: var(--ancf-radius); margin-bottom: 20px;
 }
 .hero-media { position: relative; }
+.hero-image {
+  width: 100%; aspect-ratio: 1; border-radius: 12px;
+  object-fit: cover; display: block; background: #111827;
+}
 .gpu-visual {
   width: 100%; aspect-ratio: 1; border-radius: 12px;
   display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;

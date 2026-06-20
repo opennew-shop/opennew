@@ -14,15 +14,15 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/ancf-commerce/ancf/services/api-gateway/internal/config"
 	handlers "github.com/ancf-commerce/ancf/services/api-gateway/internal/handler"
 	"github.com/ancf-commerce/ancf/services/api-gateway/internal/middleware"
-	"github.com/ancf-commerce/ancf/services/catalog/internal/repository"
-	"github.com/ancf-commerce/ancf/services/catalog/internal/service"
+	"github.com/ancf-commerce/ancf/services/catalog/repository"
+	"github.com/ancf-commerce/ancf/services/catalog/service"
 )
 
 // MOCK_BASE is the base URL of the mock/test server used during development.

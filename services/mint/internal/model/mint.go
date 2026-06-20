@@ -65,18 +65,18 @@ func ValidateMintTransition(from, to string) error {
 
 // MintRequest maps to the mint_requests table.
 type MintRequest struct {
-	ID                 int64           `json:"id" db:"id"`
-	RequestID          string          `json:"request_id" db:"request_id"`
-	Wallet             string          `json:"wallet" db:"wallet"`
-	AssetID            int64           `json:"asset_id" db:"asset_id"`
-	ReserveDepositTxID *string         `json:"reserve_deposit_tx_id,omitempty" db:"reserve_deposit_tx_id"`
-	AmountMinor        int64           `json:"amount_minor" db:"amount_minor"`
-	Status             string          `json:"status" db:"status"`
-	RiskScore          *float64        `json:"risk_score,omitempty" db:"risk_score"`
-	ApprovalID         *string         `json:"approval_id,omitempty" db:"approval_id"`
-	ChainMintTxID      *string         `json:"chain_mint_tx_id,omitempty" db:"chain_mint_tx_id"`
-	CreatedAt          time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at" db:"updated_at"`
+	ID                 int64     `json:"id" db:"id"`
+	RequestID          string    `json:"request_id" db:"request_id"`
+	Wallet             string    `json:"wallet" db:"wallet"`
+	AssetID            int64     `json:"asset_id" db:"asset_id"`
+	ReserveDepositTxID *string   `json:"reserve_deposit_tx_id,omitempty" db:"reserve_deposit_tx_id"`
+	AmountMinor        int64     `json:"amount_minor" db:"amount_minor"`
+	Status             string    `json:"status" db:"status"`
+	RiskScore          *float64  `json:"risk_score,omitempty" db:"risk_score"`
+	ApprovalID         *string   `json:"approval_id,omitempty" db:"approval_id"`
+	ChainMintTxID      *string   `json:"chain_mint_tx_id,omitempty" db:"chain_mint_tx_id"`
+	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // MintPolicy maps to the mint_policies table.
@@ -93,13 +93,13 @@ type MintPolicy struct {
 
 // Asset maps to the assets table (subset relevant to mint service).
 type Asset struct {
-	ID          int64     `json:"id" db:"id"`
-	Symbol      string    `json:"symbol" db:"symbol"`
-	Decimals    int       `json:"decimals" db:"decimals"`
-	AssetType   string    `json:"asset_type" db:"asset_type"`
-	Network     string    `json:"network" db:"network"`
-	MintAddress *string   `json:"mint_address,omitempty" db:"mint_address"`
-	Status      string    `json:"status" db:"status"`
+	ID          int64   `json:"id" db:"id"`
+	Symbol      string  `json:"symbol" db:"symbol"`
+	Decimals    int     `json:"decimals" db:"decimals"`
+	AssetType   string  `json:"asset_type" db:"asset_type"`
+	Network     string  `json:"network" db:"network"`
+	MintAddress *string `json:"mint_address,omitempty" db:"mint_address"`
+	Status      string  `json:"status" db:"status"`
 }
 
 // --- API request/response structs ---
@@ -133,22 +133,24 @@ type ChainDepositProof struct {
 	ToAddress       string `json:"to_address"`
 	AmountMinor     int64  `json:"amount_minor"`
 	AssetSymbol     string `json:"asset_symbol"`
+	MintAddress     string `json:"mint_address"`
 	DepositIntentID string `json:"deposit_intent_id,omitempty"`
 	BlockNumber     int64  `json:"block_number"`
+	Confirmations   int    `json:"confirmations"`
 }
 
 // MintStatusResponse is the response for GET /api/v1/wallet/mint-status.
 type MintStatusResponse struct {
-	RequestID          string  `json:"request_id"`
-	Wallet             string  `json:"wallet"`
-	AssetSymbol        string  `json:"asset_symbol"`
-	AmountMinor        int64   `json:"amount_minor"`
-	Status             string  `json:"status"`
+	RequestID          string   `json:"request_id"`
+	Wallet             string   `json:"wallet"`
+	AssetSymbol        string   `json:"asset_symbol"`
+	AmountMinor        int64    `json:"amount_minor"`
+	Status             string   `json:"status"`
 	RiskScore          *float64 `json:"risk_score,omitempty"`
-	ReserveDepositTxID *string `json:"reserve_deposit_tx_id,omitempty"`
-	ChainMintTxID      *string `json:"chain_mint_tx_id,omitempty"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ReserveDepositTxID *string  `json:"reserve_deposit_tx_id,omitempty"`
+	ChainMintTxID      *string  `json:"chain_mint_tx_id,omitempty"`
+	CreatedAt          string   `json:"created_at"`
+	UpdatedAt          string   `json:"updated_at"`
 }
 
 // ReserveInfoResponse is the response for GET /api/v1/wallet/reserve-info.
