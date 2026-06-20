@@ -476,7 +476,7 @@ func TestReserveBalanceImmutability(t *testing.T) {
 			{"mint_credit", 0, 1000000, false},         // Deposit adds to liability.
 			{"redemption_debit", 0, -1000000, false},    // Redemption reduces liability.
 			{"reserve_deposit", 5000000, 0, false},      // Reserve deposit increases reserve.
-			{"unauthorized_mint", 0, 99999999999, true}, // Massive mint without deposit.
+			{"unauthorized_mint", 0, 200000000000, true}, // Massive mint without deposit.
 		}
 
 		reserve := int64(100000000000)

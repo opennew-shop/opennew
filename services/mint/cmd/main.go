@@ -15,12 +15,12 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 
-	chainRepo "github.com/ancf-commerce/ancf/services/chain-adapter/internal/repository"
-	ledgerRepo "github.com/ancf-commerce/ancf/services/ledger/internal/repository"
-	ledgerSvc "github.com/ancf-commerce/ancf/services/ledger/internal/service"
+	chainRepo "github.com/ancf-commerce/ancf/services/chain-adapter/repository"
+	ledgerRepo "github.com/ancf-commerce/ancf/services/ledger/repository"
+	ledgerSvc "github.com/ancf-commerce/ancf/services/ledger/service"
 	"github.com/ancf-commerce/ancf/services/mint/internal/handler"
 	"github.com/ancf-commerce/ancf/services/mint/internal/middleware"
 	"github.com/ancf-commerce/ancf/services/mint/internal/repository"

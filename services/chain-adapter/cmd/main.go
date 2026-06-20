@@ -13,13 +13,14 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 
 	"github.com/ancf-commerce/ancf/services/chain-adapter/internal/handler"
 	"github.com/ancf-commerce/ancf/services/chain-adapter/internal/model"
 	"github.com/ancf-commerce/ancf/services/chain-adapter/internal/repository"
 	"github.com/ancf-commerce/ancf/services/chain-adapter/internal/service"
+	solanawatcher "github.com/ancf-commerce/ancf/services/chain-adapter/internal/solana"
 	"github.com/ancf-commerce/ancf/services/chain-adapter/internal/watcher"
 )
 
@@ -44,6 +45,10 @@ func main() {
 	solanaRPCEndpoint := os.Getenv("SOLANA_RPC_ENDPOINT")
 	if solanaRPCEndpoint == "" {
 		solanaRPCEndpoint = "https://api.mainnet-beta.solana.com"
+	}
+	solanaUSDCMint := os.Getenv("SOLANA_USDC_MINT")
+	if solanaUSDCMint == "" {
+		solanaUSDCMint = solanawatcher.USDCMainnetMint
 	}
 
 	sonicRPCEndpoint := os.Getenv("SONIC_RPC_ENDPOINT")
@@ -127,21 +132,23 @@ func main() {
 	}
 
 	// ------------------------------------------------------------------
-	// Deposit watchers (Phase 3 skeleton — polling is no-op until RPC
-	// integration is implemented; the simulate-deposit endpoint drives
-	// the pipeline for testing).
+	// Deposit watchers. Solana polling is live; Sonic-L2 remains deferred.
 	// ------------------------------------------------------------------
 
 	// Solana deposit watcher.
-	solanaWatcher := watcher.NewSolanaDepositWatcher(
+	solanaWatcher := solanawatcher.NewSolanaDepositWatcher(
 		solanaRPCEndpoint,
+		"",
 		reserveSolana,
 		chainRepo,
+		nil,
 	)
+	solanaWatcher.SetAssetMints(map[string]string{
+		"vUSDC": solanaUSDCMint,
+		"USDC":  solanaUSDCMint,
+	})
 	// Wire outbox support for cross-service eventual consistency.
 	solanaWatcher.SetOutbox(db, outboxRepo)
-	// The event handler is wired after construction. In Phase 3 this is nil
-	// and the simulate-deposit endpoint bypasses the watcher.
 
 	// Sonic-L2 deposit watcher (skeleton — same pattern as Solana).
 	_ = watcher.NewDepositWatcher(
@@ -193,7 +200,7 @@ func main() {
 				"watchers": gin.H{
 					"solana": gin.H{
 						"running":   solanaWatcher.IsRunning(),
-						"last_block": solanaWatcher.LastBlock(),
+						"last_slot": solanaWatcher.LastSlot(),
 					},
 				},
 			},
@@ -220,8 +227,11 @@ func main() {
 	// ------------------------------------------------------------------
 	watcherCtx, watcherCancel := context.WithCancel(context.Background())
 	defer watcherCancel()
-	solanaWatcher.Start(watcherCtx)
-	logger.Info("Solana deposit watcher started (skeleton mode)")
+	if err := solanaWatcher.Start(watcherCtx); err != nil {
+		logger.Error("failed to start Solana deposit watcher", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("Solana deposit watcher started")
 
 	// ------------------------------------------------------------------
 	// Start outbox deposit processor (SUB-020: cross-service outbox

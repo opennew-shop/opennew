@@ -39,8 +39,8 @@ func HTTPSignature() gin.HandlerFunc {
 		if sigInput == "" {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": gin.H{
-					"code":    "MISSING_SIGNATURE_INPUT",
-					"message": "HTTP Message Signature required. Missing Signature-Input header (RFC 9421).",
+					"code":       "MISSING_SIGNATURE_INPUT",
+					"message":    "HTTP Message Signature required. Missing Signature-Input header (RFC 9421).",
 					"request_id": c.GetString("request_id"),
 				},
 			})
@@ -50,8 +50,8 @@ func HTTPSignature() gin.HandlerFunc {
 		if signature == "" {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": gin.H{
-					"code":    "MISSING_SIGNATURE",
-					"message": "HTTP Message Signature required. Missing Signature header (RFC 9421).",
+					"code":       "MISSING_SIGNATURE",
+					"message":    "HTTP Message Signature required. Missing Signature header (RFC 9421).",
 					"request_id": c.GetString("request_id"),
 				},
 			})
@@ -64,8 +64,8 @@ func HTTPSignature() gin.HandlerFunc {
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": gin.H{
-					"code":    "INVALID_SIGNATURE_INPUT",
-					"message": fmt.Sprintf("Failed to parse Signature-Input header: %s", err.Error()),
+					"code":       "INVALID_SIGNATURE_INPUT",
+					"message":    fmt.Sprintf("Failed to parse Signature-Input header: %s", err.Error()),
 					"request_id": c.GetString("request_id"),
 				},
 			})
@@ -74,12 +74,23 @@ func HTTPSignature() gin.HandlerFunc {
 
 		// Verify signature timestamp is within the acceptable window (5 minutes)
 		if created, ok := sigParams["created"]; ok {
-			createdTime := time.Unix(int64(created), 0)
+			createdFloat, ok := created.(float64)
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"error": gin.H{
+						"code":       "INVALID_SIGNATURE_CREATED",
+						"message":    "Signature-Input created parameter must be numeric.",
+						"request_id": c.GetString("request_id"),
+					},
+				})
+				return
+			}
+			createdTime := time.Unix(int64(createdFloat), 0)
 			if time.Since(createdTime) > 5*time.Minute || time.Since(createdTime) < -5*time.Minute {
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 					"error": gin.H{
-						"code":    "SIGNATURE_EXPIRED",
-						"message": "HTTP signature creation timestamp is outside the acceptable window (5 minutes).",
+						"code":       "SIGNATURE_EXPIRED",
+						"message":    "HTTP signature creation timestamp is outside the acceptable window (5 minutes).",
 						"request_id": c.GetString("request_id"),
 					},
 				})
@@ -92,8 +103,8 @@ func HTTPSignature() gin.HandlerFunc {
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": gin.H{
-					"code":    "INVALID_SIGNATURE_COVERAGE",
-					"message": "Signature-Input must specify covered components.",
+					"code":       "INVALID_SIGNATURE_COVERAGE",
+					"message":    "Signature-Input must specify covered components.",
 					"request_id": c.GetString("request_id"),
 				},
 			})
@@ -105,8 +116,8 @@ func HTTPSignature() gin.HandlerFunc {
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": gin.H{
-					"code":    "SIGNATURE_BASE_ERROR",
-					"message": fmt.Sprintf("Failed to build signature base: %s", err.Error()),
+					"code":       "SIGNATURE_BASE_ERROR",
+					"message":    fmt.Sprintf("Failed to build signature base: %s", err.Error()),
 					"request_id": c.GetString("request_id"),
 				},
 			})
@@ -118,8 +129,8 @@ func HTTPSignature() gin.HandlerFunc {
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": gin.H{
-					"code":    "INVALID_SIGNATURE_ENCODING",
-					"message": "Signature header is not valid base64.",
+					"code":       "INVALID_SIGNATURE_ENCODING",
+					"message":    "Signature header is not valid base64.",
 					"request_id": c.GetString("request_id"),
 				},
 			})
@@ -143,8 +154,8 @@ func HTTPSignature() gin.HandlerFunc {
 		if len(sigBytes) < 16 {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": gin.H{
-					"code":    "INVALID_SIGNATURE",
-					"message": "HTTP signature is too short to be valid.",
+					"code":       "INVALID_SIGNATURE",
+					"message":    "HTTP signature is too short to be valid.",
 					"request_id": c.GetString("request_id"),
 				},
 			})

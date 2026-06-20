@@ -39,7 +39,10 @@ const __dirname = path.dirname(__filename);
 /*  Configuration                                                      */
 /* ------------------------------------------------------------------ */
 
-const API_BASE = (process.env.ANCF_API_BASE || 'http://127.0.0.1:8080').replace(/\/+$/, '');
+const RAW_API_BASE = (process.env.ANCF_API_BASE || 'http://127.0.0.1:8080').replace(/\/+$/, '');
+const API_BASE = /^http:\/\/(www\.)?opennew\.shop$/i.test(RAW_API_BASE)
+    ? 'http://127.0.0.1:8080'
+    : RAW_API_BASE;
 const AGENT_PORT = parseInt(process.env.ANCF_AGENT_PORT || '3000', 10);
 const AGENT_HOST = process.env.ANCF_AGENT_HOST || '127.0.0.1';
 const FIRMWARE_DIR = process.env.ANCF_FIRMWARE_DIR || path.resolve(__dirname, '..', '..', '..', 'firmware', 'components', 'dist');
@@ -50,6 +53,38 @@ const DEV_FIRMWARE_PUBKEY = 'AsRoFMpBrxEkmxTw5qTvEGxe9KfS4YdvejXaFTKo5x8E'; // d
 
 // SECURITY FIX: F-006-04 — CSP nonce generated at startup
 let CSP_NONCE: string = '';
+
+function productAssetSVG(name: string, label: string, accent: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-label="${label}">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="36%" cy="26%" r="62%">
+      <stop offset="0" stop-color="${accent}" stop-opacity=".42"/>
+      <stop offset=".6" stop-color="${accent}" stop-opacity=".08"/>
+      <stop offset="1" stop-color="${accent}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="640" height="640" rx="56" fill="url(#bg)"/>
+  <rect width="640" height="640" rx="56" fill="url(#glow)"/>
+  <rect x="112" y="174" width="416" height="292" rx="34" fill="#0f172a" stroke="${accent}" stroke-opacity=".7" stroke-width="8"/>
+  <rect x="158" y="220" width="324" height="200" rx="22" fill="#020617" stroke="#334155" stroke-width="4"/>
+  <g fill="${accent}" opacity=".85">
+    <rect x="82" y="242" width="46" height="22" rx="6"/>
+    <rect x="82" y="310" width="46" height="22" rx="6"/>
+    <rect x="82" y="378" width="46" height="22" rx="6"/>
+    <rect x="512" y="242" width="46" height="22" rx="6"/>
+    <rect x="512" y="310" width="46" height="22" rx="6"/>
+    <rect x="512" y="378" width="46" height="22" rx="6"/>
+  </g>
+  <circle cx="320" cy="320" r="74" fill="none" stroke="${accent}" stroke-width="10" opacity=".8"/>
+  <circle cx="320" cy="320" r="38" fill="${accent}" opacity=".22"/>
+  <text x="320" y="548" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="800" fill="#f8fafc">${name}</text>
+</svg>`;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Crypto Utility Functions (SECURITY FIX: F-006-01)                  */
@@ -720,8 +755,8 @@ function generateLegacyVueCheckoutHTML(manifest: ANCFManifest, apiBase: string, 
 
                         const intent = prepareResp.result || prepareResp;
                         const sig = prompt(
-                            'Confirm checkout for ' + qty + 'x ' + (product?.title || 'item') + '\\nIntent: ' + intent.order_intent_id + '\\n\\nEnter signature (demo: OK):',
-                            'demo_signature_placeholder'
+                            'Confirm checkout for ' + qty + 'x ' + (product?.title || 'item') + '\\nIntent: ' + intent.order_intent_id + '\\n\\nEnter wallet signature:',
+                            ''
                         );
                         if (!sig) { alert('Checkout cancelled'); return; }
 
@@ -811,6 +846,9 @@ const I18N_LABELS: Record<SupportedLocale, Record<string, string | Record<string
         quote: 'Quote',
         agentIntake: 'Agent Intake',
         itemsRendered: 'items rendered',
+        liveCatalog: 'Live',
+        syncingCatalog: 'Syncing',
+        syncFailed: 'Sync failed',
         bridge: 'Bridge',
         payload: 'Payload',
         navCatalog: 'Catalog',
@@ -858,6 +896,9 @@ const I18N_LABELS: Record<SupportedLocale, Record<string, string | Record<string
         quote: '报价',
         agentIntake: 'Agent 接入',
         itemsRendered: '个商品已渲染',
+        liveCatalog: '实时',
+        syncingCatalog: '同步中',
+        syncFailed: '同步失败',
         bridge: '桥接',
         payload: '载荷',
         navCatalog: '目录',
@@ -914,13 +955,25 @@ function normalizeSearchItem(value: unknown): SearchResultItem | null {
         return null;
     }
 
-    const price = asObject(item.price);
-    if (
-        !price ||
-        typeof price.currency !== 'string' ||
-        typeof price.amount_minor !== 'string' ||
-        typeof price.scale !== 'number'
-    ) {
+    const priceRaw = asObject(item.price);
+    const currency = typeof priceRaw?.currency === 'string'
+        ? priceRaw.currency
+        : typeof item.currency === 'string'
+            ? item.currency
+            : '';
+    const amountMinorRaw = typeof priceRaw?.amount_minor === 'string' || typeof priceRaw?.amount_minor === 'number'
+        ? priceRaw.amount_minor
+        : typeof item.price_amount_minor === 'string' || typeof item.price_amount_minor === 'number'
+            ? item.price_amount_minor
+            : undefined;
+    const scaleRaw = typeof priceRaw?.scale === 'number' || typeof priceRaw?.scale === 'string'
+        ? priceRaw.scale
+        : typeof item.price_scale === 'number' || typeof item.price_scale === 'string'
+            ? item.price_scale
+            : undefined;
+    const amount_minor = amountMinorRaw === undefined ? '' : String(amountMinorRaw);
+    const scale = typeof scaleRaw === 'number' ? scaleRaw : Number(scaleRaw);
+    if (!currency || !/^\d+$/.test(amount_minor) || !Number.isInteger(scale) || scale < 0) {
         return null;
     }
 
@@ -938,9 +991,9 @@ function normalizeSearchItem(value: unknown): SearchResultItem | null {
         sku_id: item.sku_id,
         title: item.title,
         price: {
-            currency: price.currency,
-            amount_minor: price.amount_minor,
-            scale: price.scale,
+            currency,
+            amount_minor,
+            scale,
         },
         stock_hint: typeof item.stock_hint === 'number' ? item.stock_hint : undefined,
         specs,
@@ -1061,9 +1114,157 @@ function buildTemplateOrchestrationScript(nonce: string): string {
         return data.result;
       }
 
-      function ensureWallet() {
+      function installModalStyles() {
+        if (document.getElementById('ancf-modal-styles')) return;
+        var style = document.createElement('style');
+        style.id = 'ancf-modal-styles';
+        style.setAttribute('nonce', '${nonce}');
+        style.textContent = [
+          '.ancf-modal-layer{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:22px;background:rgba(2,6,23,.54);backdrop-filter:blur(12px);animation:ancfFadeIn .16s ease-out}',
+          '.ancf-modal-layer.closing{animation:ancfFadeOut .14s ease-in forwards}',
+          '.ancf-modal{width:min(520px,calc(100vw - 32px));border:1px solid rgba(148,163,184,.28);border-radius:18px;background:linear-gradient(180deg,#ffffff,#f8fafc);box-shadow:0 24px 80px rgba(15,23,42,.34);color:#0f172a;overflow:hidden;animation:ancfModalIn .22s cubic-bezier(.2,.85,.28,1.18)}',
+          '.ancf-modal-layer.closing .ancf-modal{animation:ancfModalOut .14s ease-in forwards}',
+          '.ancf-modal-head{padding:20px 22px 12px;border-bottom:1px solid #e2e8f0}',
+          '.ancf-modal-kicker{margin:0 0 6px;color:#059669;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}',
+          '.ancf-modal-title{margin:0;font-size:20px;line-height:1.25;font-weight:850;letter-spacing:0}',
+          '.ancf-modal-body{padding:18px 22px 8px}',
+          '.ancf-modal-message{margin:0 0 14px;color:#475569;font-size:14px;line-height:1.55}',
+          '.ancf-modal-field{display:grid;gap:8px;margin:12px 0}',
+          '.ancf-modal-field label{font-size:13px;font-weight:750;color:#334155}',
+          '.ancf-modal-field input{height:44px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;background:#fff;color:#0f172a;font:inherit;outline:none;transition:border-color .14s,box-shadow .14s}',
+          '.ancf-modal-field input:focus{border-color:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.16)}',
+          '.ancf-modal-rows{display:grid;gap:10px;margin:12px 0}',
+          '.ancf-modal-row{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#fff}',
+          '.ancf-modal-row span{color:#64748b;font-size:12px;font-weight:750;text-transform:uppercase}',
+          '.ancf-modal-row strong{min-width:0;text-align:right;font-size:13px;word-break:break-word}',
+          '.ancf-modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px 20px}',
+          '.ancf-modal-btn{height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:0 16px;background:#fff;color:#0f172a;font-weight:800;cursor:pointer;transition:transform .14s,background .14s,border-color .14s}',
+          '.ancf-modal-btn:hover{transform:translateY(-1px);background:#f8fafc}',
+          '.ancf-modal-btn.primary{border-color:#10b981;background:#10b981;color:#022c22}',
+          '.ancf-modal-btn.primary:hover{background:#34d399}',
+          '.ancf-modal-btn.danger{border-color:#f97316;background:#fff7ed;color:#9a3412}',
+          '@keyframes ancfFadeIn{from{opacity:0}to{opacity:1}}',
+          '@keyframes ancfFadeOut{from{opacity:1}to{opacity:0}}',
+          '@keyframes ancfModalIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}',
+          '@keyframes ancfModalOut{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(10px) scale(.98)}}',
+          '@media (prefers-reduced-motion:reduce){.ancf-modal-layer,.ancf-modal,.ancf-modal-layer.closing,.ancf-modal-layer.closing .ancf-modal{animation:none}}'
+        ].join('\\n');
+        document.head.appendChild(style);
+      }
+
+      function el(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text != null) node.textContent = String(text);
+        return node;
+      }
+
+      function showModal(options) {
+        installModalStyles();
+        return new Promise(function (resolve) {
+          var layer = el('div', 'ancf-modal-layer');
+          var panel = el('section', 'ancf-modal');
+          panel.setAttribute('role', 'dialog');
+          panel.setAttribute('aria-modal', 'true');
+
+          var head = el('header', 'ancf-modal-head');
+          head.appendChild(el('p', 'ancf-modal-kicker', options.kicker || 'ANCF'));
+          head.appendChild(el('h2', 'ancf-modal-title', options.title || 'ANCF'));
+          panel.appendChild(head);
+
+          var body = el('div', 'ancf-modal-body');
+          if (options.message) body.appendChild(el('p', 'ancf-modal-message', options.message));
+
+          var fields = options.fields || [];
+          fields.forEach(function (field) {
+            var wrap = el('div', 'ancf-modal-field');
+            var label = el('label', '', field.label || field.name);
+            var input = document.createElement('input');
+            input.name = field.name;
+            input.type = field.type || 'text';
+            input.value = field.value || '';
+            input.placeholder = field.placeholder || '';
+            label.appendChild(input);
+            wrap.appendChild(label);
+            body.appendChild(wrap);
+          });
+
+          var rows = options.rows || [];
+          if (rows.length) {
+            var rowList = el('div', 'ancf-modal-rows');
+            rows.forEach(function (row) {
+              var item = el('div', 'ancf-modal-row');
+              item.appendChild(el('span', '', row.label));
+              item.appendChild(el('strong', '', row.value));
+              rowList.appendChild(item);
+            });
+            body.appendChild(rowList);
+          }
+          panel.appendChild(body);
+
+          var foot = el('footer', 'ancf-modal-foot');
+          var actions = options.actions || [{ id: 'ok', label: 'OK', primary: true }];
+          var settled = false;
+
+          function values() {
+            var out = {};
+            Array.prototype.forEach.call(panel.querySelectorAll('input[name]'), function (input) {
+              out[input.name] = input.value;
+            });
+            return out;
+          }
+
+          function close(action) {
+            if (settled) return;
+            settled = true;
+            document.removeEventListener('keydown', onKeydown);
+            layer.classList.add('closing');
+            window.setTimeout(function () {
+              if (layer.parentNode) layer.parentNode.removeChild(layer);
+              resolve({ action: action, values: values() });
+            }, 150);
+          }
+
+          function onKeydown(event) {
+            if (event.key === 'Escape') close(options.cancelAction || 'cancel');
+            if (event.key === 'Enter' && fields.length) {
+              var primary = actions.find(function (action) { return action.primary; }) || actions[actions.length - 1];
+              close(primary.id);
+            }
+          }
+
+          actions.forEach(function (action) {
+            var button = el('button', 'ancf-modal-btn' + (action.primary ? ' primary' : '') + (action.danger ? ' danger' : ''), action.label);
+            button.type = 'button';
+            button.addEventListener('click', function () { close(action.id); });
+            foot.appendChild(button);
+          });
+          panel.appendChild(foot);
+          layer.appendChild(panel);
+          document.body.appendChild(layer);
+          document.addEventListener('keydown', onKeydown);
+
+          var firstInput = panel.querySelector('input');
+          var firstPrimary = panel.querySelector('.ancf-modal-btn.primary') || panel.querySelector('.ancf-modal-btn');
+          window.setTimeout(function () { (firstInput || firstPrimary || panel).focus(); }, 20);
+        });
+      }
+
+      async function ensureWallet() {
         var current = localStorage.getItem('ancf_wallet') || 'USER_WALLET';
-        var wallet = prompt(t('walletPrompt', 'Wallet address for backend quote:'), current);
+        var result = await showModal({
+          kicker: t('quote', 'Quote'),
+          title: t('requestQuote', 'Request Quote'),
+          message: t('walletPrompt', 'Wallet address for backend quote:'),
+          fields: [{ name: 'wallet', label: t('wallet', 'Wallet'), value: current, placeholder: 'USER_WALLET' }],
+          cancelAction: 'cancel',
+          actions: [
+            { id: 'cancel', label: t('cancel', 'Cancel') },
+            { id: 'confirm', label: t('requestQuote', 'Request Quote'), primary: true }
+          ]
+        });
+        if (result.action !== 'confirm') return '';
+        var wallet = String(result.values.wallet || '').trim();
         if (!wallet) return '';
         localStorage.setItem('ancf_wallet', wallet);
         return wallet;
@@ -1092,7 +1293,7 @@ function buildTemplateOrchestrationScript(nonce: string): string {
 
       async function quoteAndMaybeCheckout(product) {
         if (!product || !product.sku_id) return;
-        var wallet = ensureWallet();
+        var wallet = await ensureWallet();
         if (!wallet) return;
 
         var quote = await bridge('ancf:quote', {
@@ -1101,14 +1302,22 @@ function buildTemplateOrchestrationScript(nonce: string): string {
           lines: [{ sku_id: product.sku_id, quantity: 1 }]
         });
         var total = formatMinor(quote.total_minor, quote.scale, quote.currency);
-        var shouldCheckout = confirm(
-          t('quoteReceived', 'Backend quote received') + '\\n' +
-          t('sku', 'SKU') + ': ' + product.sku_id + '\\n' +
-          t('quoteId', 'Quote') + ': ' + quote.quote_id + '\\n' +
-          t('total', 'Total') + ': ' + total + '\\n\\n' +
-          t('continueCheckout', 'Continue to checkout prepare and commit?')
-        );
-        if (!shouldCheckout) return;
+        var quoteDecision = await showModal({
+          kicker: t('quoteReceived', 'Backend quote received'),
+          title: total,
+          message: t('continueCheckout', 'Continue to checkout prepare and commit?'),
+          rows: [
+            { label: t('sku', 'SKU'), value: product.sku_id },
+            { label: t('quoteId', 'Quote'), value: quote.quote_id },
+            { label: t('total', 'Total'), value: total }
+          ],
+          cancelAction: 'later',
+          actions: [
+            { id: 'later', label: t('notNow', 'Not now') },
+            { id: 'checkout', label: t('checkout', 'Checkout'), primary: true }
+          ]
+        });
+        if (quoteDecision.action !== 'checkout') return;
 
         var intent = await bridge('ancf:checkout_prepare', {
           quote_id: quote.quote_id,
@@ -1116,12 +1325,19 @@ function buildTemplateOrchestrationScript(nonce: string): string {
           network: network,
           agent_session_id: agentSessionId
         });
-        var signature = prompt(
-          t('signCheckoutIntent', 'Sign checkout intent') + '\\n' +
-          t('intent', 'Intent') + ': ' + intent.order_intent_id + '\\n\\n' +
-          t('demoSignature', 'Demo signature:'),
-          'demo_signature_placeholder'
-        );
+        var signatureResult = await showModal({
+          kicker: t('checkout', 'Checkout'),
+          title: t('signCheckoutIntent', 'Sign checkout intent'),
+          message: t('intent', 'Intent') + ': ' + intent.order_intent_id,
+          fields: [{ name: 'signature', label: t('walletSignature', 'Wallet signature:'), value: '' }],
+          cancelAction: 'cancel',
+          actions: [
+            { id: 'cancel', label: t('cancel', 'Cancel') },
+            { id: 'sign', label: t('checkout', 'Checkout'), primary: true }
+          ]
+        });
+        if (signatureResult.action !== 'sign') return;
+        var signature = String(signatureResult.values.signature || '').trim();
         if (!signature) return;
 
         var commit = await bridge('ancf:checkout_commit', {
@@ -1132,7 +1348,11 @@ function buildTemplateOrchestrationScript(nonce: string): string {
           agent_session_id: agentSessionId,
           idempotency_key: 'ck_' + requestId()
         });
-        alert(t('checkoutCommitted', 'Checkout committed') + ': ' + (commit.order_id || commit.status || 'ok'));
+        await showModal({
+          kicker: t('checkoutCommitted', 'Checkout committed'),
+          title: String(commit.order_id || commit.status || 'ok'),
+          actions: [{ id: 'ok', label: 'OK', primary: true }]
+        });
       }
 
       document.addEventListener('ANCF_TEMPLATE_SELECT', function (event) {
@@ -1141,7 +1361,12 @@ function buildTemplateOrchestrationScript(nonce: string): string {
 
       document.addEventListener('ANCF_TEMPLATE_QUOTE', function (event) {
         quoteAndMaybeCheckout(event.detail).catch(function (error) {
-          alert(t('operationFailed', 'ANCF operation failed') + ': ' + (error && error.message ? error.message : String(error)));
+          showModal({
+            kicker: t('operationFailed', 'ANCF operation failed'),
+            title: t('operationFailed', 'ANCF operation failed'),
+            message: error && error.message ? error.message : String(error),
+            actions: [{ id: 'ok', label: 'OK', primary: true }]
+          });
         });
       });
 
@@ -1469,11 +1694,9 @@ async function doCheckout() {
       wallet: WALLET, network: 'solana-mainnet',
       agent_session_id: 'session_' + SESSION
     });
-    if (!prepResp.ok) throw new Error('Prepare HTTP ' + prepResp.status);
-    const intent = await prepResp.json();
 
-    // Step 2: commit (demo signature)
-    const sig = prompt('Sign checkout for ' + PRODUCT.title + '\\nIntent: ' + intent.order_intent_id + '\\n\\nEnter demo signature:', 'demo_sig_' + Date.now());
+    // Step 2: commit (wallet signature)
+    const sig = prompt('Sign checkout for ' + PRODUCT.title + '\\nIntent: ' + intent.order_intent_id + '\\n\\nEnter wallet signature:', '');
     if (!sig) { btn.disabled = false; btn.innerHTML = 'Confirm Checkout'; return; }
 
     // Step 2: commit via Bridge
@@ -1521,6 +1744,7 @@ const BRIDGE_ALLOWED_COMMANDS = new Set([
     'ancf:agent_register',
     'ancf:agent_bind_wallet',
     'ancf:agent_info',
+    'ancf:agent_quote_requests',
     // Multi-chain payments (SUB-028)
     'ancf:payment_create_link',
     'ancf:payment_status',
@@ -1588,7 +1812,15 @@ async function checkoutPrepareAPI(params: Record<string, unknown>): Promise<unkn
  */
 async function catalogCreateAPI(params: Record<string, unknown>): Promise<unknown> {
     const url = `${API_BASE}/api/v1/catalog/products`;
-    const resp = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(params) });
+    const token = (params.token as string) || AGENT_SESSION_TOKEN;
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-ANCF-Agent-Token': token || '',
+        },
+        body: JSON.stringify(params),
+    });
     if (!resp.ok) { const err = await resp.text().catch(()=>''); throw new Error(`Catalog Create HTTP ${resp.status}${err?': '+err:''}`); }
     return resp.json();
 }
@@ -1609,14 +1841,26 @@ async function catalogGetAPI(params: Record<string, unknown>): Promise<unknown> 
 async function catalogUpdateAPI(params: Record<string, unknown>): Promise<unknown> {
     const sku = params.sku_id || '';
     const url = `${API_BASE}/api/v1/catalog/products/${encodeURIComponent(sku as string)}`;
-    const resp = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(params) });
+    const token = (params.token as string) || AGENT_SESSION_TOKEN;
+    const resp = await fetch(url, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-ANCF-Agent-Token': token || '',
+        },
+        body: JSON.stringify(params),
+    });
     if (!resp.ok) throw new Error(`Catalog Update HTTP ${resp.status}`);
     return resp.json();
 }
 async function catalogDeleteAPI(params: Record<string, unknown>): Promise<unknown> {
     const sku = params.sku_id || '';
     const url = `${API_BASE}/api/v1/catalog/products/${encodeURIComponent(sku as string)}`;
-    const resp = await fetch(url, { method:'DELETE' });
+    const token = (params.token as string) || AGENT_SESSION_TOKEN;
+    const resp = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'X-ANCF-Agent-Token': token || '' },
+    });
     if (!resp.ok) throw new Error(`Catalog Delete HTTP ${resp.status}`);
     return resp.json();
 }
@@ -1690,6 +1934,25 @@ async function agentInfoAPI(params: Record<string, unknown>): Promise<unknown> {
     if (!resp.ok) {
         const err = await resp.text().catch(() => '');
         throw new Error(`Agent Info HTTP ${resp.status}${err ? ': ' + err : ''}`);
+    }
+    return resp.json();
+}
+
+async function agentQuoteRequestsAPI(params: Record<string, unknown>): Promise<unknown> {
+    const limit = Math.min(Math.max(1, parseInt((params.limit as string) || '50', 10) || 50), 100);
+    const status = typeof params.status === 'string' ? `&status=${encodeURIComponent(params.status)}` : '';
+    const url = `${API_BASE}/api/v1/agent/quote-requests?limit=${limit}${status}`;
+    const token = (params.token as string) || AGENT_SESSION_TOKEN;
+    const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-ANCF-Agent-Token': token || '',
+        },
+    });
+    if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        throw new Error(`Agent Quote Requests HTTP ${resp.status}${err ? ': ' + err : ''}`);
     }
     return resp.json();
 }
@@ -1821,6 +2084,7 @@ async function main(): Promise<void> {
     console.log('[Agent] Step 3/4: Starting local HTTP server...');
 
     const app = express();
+    app.disable('x-powered-by');
 
     // Body parsing for bridge API
     app.use(express.json({ limit: '1mb' }));
@@ -1848,6 +2112,22 @@ async function main(): Promise<void> {
             }
         },
     }));
+
+    app.get('/assets/products/:file', (req: Request, res: express.Response) => {
+        const assets: Record<string, string> = {
+            'h100.svg': productAssetSVG('H100', 'NVIDIA H100 product image', '#00FFA3'),
+            'a100.svg': productAssetSVG('A100', 'NVIDIA A100 product image', '#4488FF'),
+            'l40s.svg': productAssetSVG('L40S', 'NVIDIA L40S product image', '#FF44AA'),
+        };
+        const svg = assets[req.params.file];
+        if (!svg) {
+            res.status(404).json({ error: 'asset not found' });
+            return;
+        }
+        res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.send(svg);
+    });
 
     // Health check
     app.get('/health', (_req: Request, res: express.Response) => {
@@ -1933,6 +2213,9 @@ async function main(): Promise<void> {
                     break;
                 case 'ancf:agent_info':
                     result = await agentInfoAPI(params || {});
+                    break;
+                case 'ancf:agent_quote_requests':
+                    result = await agentQuoteRequestsAPI(params || {});
                     break;
                 case 'ancf:payment_create_link':
                     result = await paymentCreateLinkAPI(params || {});

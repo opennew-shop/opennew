@@ -93,11 +93,17 @@
 
   <script>
     (function () {
-      var payload = JSON.parse(document.getElementById('ancf-payload').textContent || '{}');
+      var app = document.getElementById('app');
+      var payload = {};
+      try {
+        payload = JSON.parse(document.getElementById('ancf-payload').textContent || '{}');
+      } catch (e) {
+        if (app) app.textContent = 'Product unavailable';
+        return;
+      }
       var labels = payload.labels || {};
       var product = payload.product || {};
       var activeImage = 0;
-      var app = document.getElementById('app');
 
       function t(key, fallback) {
         var value = labels[key];
@@ -119,8 +125,14 @@
 
       function priceText(price) {
         price = price || {};
-        var amount = Number(BigInt(price.amount_minor || '0')) / Math.pow(10, price.scale || 0);
-        return amount.toFixed(Math.min(price.scale || 0, 6)) + ' ' + esc(price.currency || '');
+        try {
+          var raw = String(price.amount_minor == null ? '0' : price.amount_minor);
+          if (!/^[0-9]+$/.test(raw)) return '— ' + esc(price.currency || '');
+          var amount = Number(BigInt(raw)) / Math.pow(10, price.scale || 0);
+          return amount.toFixed(Math.min(price.scale || 0, 6)) + ' ' + esc(price.currency || '');
+        } catch (e) {
+          return '— ' + esc(price.currency || '');
+        }
       }
 
       function stockText(stock) {
@@ -136,6 +148,10 @@
         return list.filter(Boolean);
       }
 
+      function productFallback() {
+        return esc(String(product.title || 'AN').slice(0, 2).toUpperCase());
+      }
+
       function emit(name, detail) {
         document.dispatchEvent(new CustomEvent(name, { detail: detail }));
         if (window.AgentBridge) {
@@ -146,12 +162,13 @@
       function render() {
         var images = gallery();
         var hero = images[activeImage] || (product.media && product.media.thumbnail) || '';
-        var specs = Object.entries(product.specs || {}).map(function (entry) {
+        var specsObj = product && typeof product.specs === 'object' && !Array.isArray(product.specs) ? product.specs : {};
+        var specs = Object.entries(specsObj).map(function (entry) {
           return '<article><span>' + esc(entry[0]) + '</span><strong>' + esc(entry[1]) + '</strong></article>';
         }).join('');
         var heroHtml = hero
-          ? '<img src="' + attr(hero) + '" alt="' + attr(product.title) + '">'
-          : '<span>' + esc(String(product.title || 'AN').slice(0, 2).toUpperCase()) + '</span>';
+          ? '<img src="' + attr(hero) + '" alt="' + attr(product.title) + '" data-fallback="' + attr(String(product.title || 'AN').slice(0, 2).toUpperCase()) + '">'
+          : '<span>' + productFallback() + '</span>';
         var galleryHtml = images.length > 1
           ? '<div class="gallery">' + images.map(function (image, index) {
               return '<button class="' + (index === activeImage ? 'active' : '') + '" data-image="' + index + '"><img src="' + attr(image) + '" alt="' + attr(product.title) + ' ' + (index + 1) + '"></button>';
@@ -176,6 +193,18 @@
         if (target.dataset.action === 'select') { emit('ANCF_TEMPLATE_SELECT', product); return; }
         if (target.dataset.action === 'quote') { emit('ANCF_TEMPLATE_QUOTE', product); return; }
       });
+
+      document.addEventListener('error', function (event) {
+        var image = event.target;
+        if (!image || image.tagName !== 'IMG') return;
+        var fallback = image.getAttribute('data-fallback') || String(product.title || 'AN').slice(0, 2).toUpperCase();
+        if (image.closest('.media-shell')) {
+          image.replaceWith(document.createRange().createContextualFragment('<span>' + esc(fallback) + '</span>'));
+        }
+        if (image.closest('.gallery')) {
+          image.closest('button').remove();
+        }
+      }, true);
 
       render();
     })();

@@ -163,15 +163,12 @@ func TestLedgerEntryValidation(t *testing.T) {
 
 	t.Run("validate balance with multiple entry pairs", func(t *testing.T) {
 		entries := []model.LedgerEntry{
-			{AmountMinor: 100, DebitAccount: "a", CreditAccount: "b"},
-			{AmountMinor: 200, DebitAccount: "c", CreditAccount: "d"},
-			{AmountMinor: 300, DebitAccount: "e", CreditAccount: "f"},
+			{TransactionID: "tx_validate", Currency: "vUSDC", AmountMinor: 100, DebitAccount: model.AccountUserAvailable, CreditAccount: model.AccountUserPending},
+			{TransactionID: "tx_validate", Currency: "vUSDC", AmountMinor: 200, DebitAccount: model.AccountUserPending, CreditAccount: model.AccountMerchantSettled},
+			{TransactionID: "tx_validate", Currency: "vUSDC", AmountMinor: 300, DebitAccount: model.AccountReserveAsset, CreditAccount: model.AccountReserveLiability},
 		}
-		// ValidateBalance compares sum of debit amounts == sum of credit amounts.
-		// Since each entry's AmountMinor is counted once for debit and once for credit,
-		// the total should always balance.
 		if !model.ValidateBalance(entries) {
-			t.Error("equal debits and credits should balance")
+			t.Error("valid double-entry rows should balance")
 		}
 	})
 }

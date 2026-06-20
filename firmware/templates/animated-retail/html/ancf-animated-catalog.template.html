@@ -43,6 +43,9 @@
     h1 { font-size: 13px; font-weight: 700; }
     .status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--ancf-muted); font-size: 11px; }
     .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ancf-primary); }
+    .live-pill { margin-left: 8px; border: 1px solid rgba(0, 255, 163, .42); border-radius: 999px; padding: 3px 7px; color: #007146; background: rgba(0, 255, 163, .12); font-size: 11px; line-height: 1; }
+    .live-pill.syncing { color: #92400E; border-color: rgba(255, 170, 0, .45); background: rgba(255, 170, 0, .12); }
+    .live-pill.error { color: #B91C1C; border-color: rgba(239, 68, 68, .35); background: rgba(239, 68, 68, .08); }
     .intro { margin-top: 12px; padding: 16px; }
     .intro h2 { margin-top: 4px; font-size: clamp(32px, 10vw, 56px); line-height: .94; letter-spacing: 0; }
     .intro p:not(.kicker) { margin-top: 10px; color: var(--ancf-muted); max-width: 560px; }
@@ -100,12 +103,25 @@
 
   <script>
     (function () {
-      var payload = JSON.parse(document.getElementById('ancf-payload').textContent || '{}');
+      var app = document.getElementById('app');
+      var payload = {};
+      try {
+        payload = JSON.parse(document.getElementById('ancf-payload').textContent || '{}');
+      } catch (e) {
+        if (app) app.textContent = 'Catalog unavailable';
+        return;
+      }
       var labels = payload.labels || {};
       var state = { query: '', filter: 'All' };
       var filters = payload.filters || ['All', 'GPU', 'API', 'Storage'];
       var products = Array.isArray(payload.products) ? payload.products : [];
-      var app = document.getElementById('app');
+      var lastProductHash = JSON.stringify(products.map(function (item) { return item && item.sku_id; }));
+      var refreshTimer = 0;
+      var refreshInFlight = false;
+      var liveStatus = {
+        state: 'idle',
+        text: 'Live'
+      };
 
       function t(key, fallback) {
         var value = labels[key];
@@ -120,6 +136,11 @@
       document.documentElement.lang = t('htmlLang', payload.locale || 'en');
       document.title = t('pageTitleCatalog', 'ANCF Animated Catalog');
 
+      function requestId() {
+        if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+        return 'catalog_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+      }
+
       function esc(value) {
         return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
           return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[ch];
@@ -132,8 +153,14 @@
 
       function priceText(price) {
         if (!price) return '';
-        var amount = Number(BigInt(price.amount_minor || '0')) / Math.pow(10, price.scale || 0);
-        return amount.toFixed(Math.min(price.scale || 0, 6)) + ' ' + esc(price.currency || '');
+        try {
+          var raw = String(price.amount_minor == null ? '0' : price.amount_minor);
+          if (!/^[0-9]+$/.test(raw)) return '— ' + esc(price.currency || '');
+          var amount = Number(BigInt(raw)) / Math.pow(10, price.scale || 0);
+          return amount.toFixed(Math.min(price.scale || 0, 6)) + ' ' + esc(price.currency || '');
+        } catch (e) {
+          return '— ' + esc(price.currency || '');
+        }
       }
 
       function stockText(stock) {
@@ -143,14 +170,98 @@
         return stock + ' ' + t('stockAvailable', 'available');
       }
 
+      function mediaFallback(item) {
+        return esc(String(item.title || 'AN').slice(0, 2).toUpperCase());
+      }
+
       function visibleProducts() {
         var query = state.query.trim().toLowerCase();
         return products.filter(function (item) {
-          var specs = Object.values(item.specs || {}).join(' ');
+          var specsObj = item && typeof item.specs === 'object' && !Array.isArray(item.specs) ? item.specs : {};
+          var specs = Object.values(specsObj).join(' ');
           var text = [item.sku_id, item.title, specs].join(' ').toLowerCase();
           var categoryOk = state.filter === 'All' || item.category === state.filter;
           return categoryOk && (!query || text.indexOf(query) !== -1);
         }).slice(0, payload.maxItems || 24);
+      }
+
+      function productHash(items) {
+        return JSON.stringify(items.map(function (item) {
+          return [
+            item && item.sku_id,
+            item && item.title,
+            item && item.stock_hint,
+            item && item.price && item.price.amount_minor,
+            item && item.price && item.price.scale,
+            item && item.category,
+            item && item.updated_at
+          ];
+        }));
+      }
+
+      function setLiveStatus(nextState, text) {
+        liveStatus = { state: nextState, text: text };
+        var node = document.getElementById('live-status');
+        if (!node) return;
+        node.className = 'live-pill ' + (nextState || '');
+        node.textContent = text;
+      }
+
+      function normalizeItems(result) {
+        if (!result || !Array.isArray(result.items)) return [];
+        return result.items.filter(function (item) {
+          return item && typeof item.sku_id === 'string' && typeof item.title === 'string';
+        }).map(function (item) {
+          if (!item.category) {
+            item.category = item.specs && item.specs.GPU ? 'GPU' : 'API';
+          }
+          return item;
+        });
+      }
+
+      function mergeProducts(nextItems) {
+        var bySku = {};
+        products.forEach(function (item) { if (item && item.sku_id) bySku[item.sku_id] = item; });
+        nextItems.forEach(function (item) { bySku[item.sku_id] = item; });
+        return Object.values(bySku).sort(function (a, b) {
+          var at = Date.parse(a.created_at || a.updated_at || '') || 0;
+          var bt = Date.parse(b.created_at || b.updated_at || '') || 0;
+          if (at !== bt) return bt - at;
+          return String(a.sku_id).localeCompare(String(b.sku_id));
+        });
+      }
+
+      async function refreshProducts() {
+        if (refreshInFlight) return;
+        refreshInFlight = true;
+        setLiveStatus('syncing', t('syncingCatalog', 'Syncing'));
+        try {
+          var response = await fetch('/bridge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              command: 'ancf:search',
+              params: { query: '', limit: payload.maxItems || 24, mode: 'hybrid' },
+              requestId: requestId()
+            })
+          });
+          var data = await response.json().catch(function () { return {}; });
+          if (!response.ok || data.error) {
+            throw new Error(data.error || ('Bridge HTTP ' + response.status));
+          }
+          var nextProducts = mergeProducts(normalizeItems(data.result || data));
+          var nextHash = productHash(nextProducts);
+          if (nextHash !== lastProductHash) {
+            products = nextProducts;
+            lastProductHash = nextHash;
+            render();
+          }
+          setLiveStatus('', t('liveCatalog', 'Live') + ' ' + products.length);
+        } catch (e) {
+          setLiveStatus('error', t('syncFailed', 'Sync failed'));
+        } finally {
+          refreshInFlight = false;
+        }
       }
 
       function emit(name, detail) {
@@ -166,7 +277,7 @@
           '<header class="topbar">',
           '<button class="icon-btn" type="button" data-action="back" aria-label="Back">&lt;</button>',
           '<div><p class="eyebrow">' + esc(payload.shopLabel || 'zero_shop_sol_01') + '</p><h1>' + esc(payload.title || t('catalogTitle', 'ANCF Shop')) + '</h1></div>',
-          '<div class="status"><span class="dot"></span><span>' + esc(payload.manifestStatus || t('manifestValid', 'Manifest valid')) + '</span></div>',
+          '<div class="status"><span class="dot"></span><span>' + esc(payload.manifestStatus || t('manifestValid', 'Manifest valid')) + '</span><span id="live-status" class="live-pill ' + esc(liveStatus.state || '') + '">' + esc(liveStatus.text) + '</span></div>',
           '</header>',
           '<section class="intro">',
           '<p class="kicker">' + esc(payload.categoryLabel || t('catalogCategoryLabel', 'Display-only catalog')) + '</p>',
@@ -176,12 +287,13 @@
           '<div class="chips">' + filters.map(function (f) { return '<button class="chip ' + (state.filter === f ? 'active' : '') + '" data-filter="' + attr(f) + '">' + esc(filterText(f)) + '</button>'; }).join('') + '</div></div>',
           '</section>',
           '<section class="product-list">' + rows.map(function (item, i) {
-            var specs = Object.entries(item.specs || {}).slice(0, 3).map(function (entry) {
+            var specsObj = item && typeof item.specs === 'object' && !Array.isArray(item.specs) ? item.specs : {};
+            var specs = Object.entries(specsObj).slice(0, 3).map(function (entry) {
               return '<span><b>' + esc(entry[0]) + '</b> ' + esc(entry[1]) + '</span>';
             }).join('');
             var thumb = item.media && item.media.thumbnail
-              ? '<img src="' + attr(item.media.thumbnail) + '" alt="' + attr(item.title) + '" loading="lazy">'
-              : '<span>' + esc(String(item.title || 'AN').slice(0, 2).toUpperCase()) + '</span>';
+              ? '<img src="' + attr(item.media.thumbnail) + '" alt="' + attr(item.title) + '" loading="lazy" data-fallback="' + attr(String(item.title || 'AN').slice(0, 2).toUpperCase()) + '">'
+              : '<span>' + mediaFallback(item) + '</span>';
             return '<article class="product-row" style="--delay:' + (i * 42) + 'ms">' +
               '<button class="media" data-select="' + attr(item.sku_id) + '">' + thumb + '</button>' +
               '<div class="summary"><div class="summary-head"><p class="sku">' + esc(item.sku_id) + '</p><span class="stock">' + esc(stockText(item.stock_hint)) + '</span></div><h3>' + esc(item.title) + '</h3><div class="specs">' + specs + '</div></div>' +
@@ -209,7 +321,22 @@
         emit(target.dataset.quote ? 'ANCF_TEMPLATE_QUOTE' : 'ANCF_TEMPLATE_SELECT', item);
       });
 
+      document.addEventListener('error', function (event) {
+        var image = event.target;
+        if (!image || image.tagName !== 'IMG' || !image.closest('.media')) return;
+        var fallback = image.getAttribute('data-fallback') || 'AN';
+        image.replaceWith(document.createRange().createContextualFragment('<span>' + esc(fallback) + '</span>'));
+      }, true);
+
       render();
+      refreshProducts();
+      refreshTimer = window.setInterval(refreshProducts, 5000);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) refreshProducts();
+      });
+      window.addEventListener('beforeunload', function () {
+        if (refreshTimer) window.clearInterval(refreshTimer);
+      });
     })();
   </script>
 </body>

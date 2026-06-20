@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -71,7 +72,7 @@ func RateLimit(cfg *config.Config, redisClient *redis.Client) gin.HandlerFunc {
 	// Pre-load Lua script if Redis is available
 	var scriptSHA string
 	if redisClient != nil {
-		sha, err := redisClient.ScriptLoad(cfg.RedisURL, rateLimitScript).Result()
+		sha, err := redisClient.ScriptLoad(context.Background(), rateLimitScript).Result()
 		if err == nil {
 			scriptSHA = sha
 		}
@@ -137,8 +138,8 @@ func RateLimit(cfg *config.Config, redisClient *redis.Client) gin.HandlerFunc {
 		if !allowed {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": gin.H{
-					"code":       "RATE_LIMIT_EXCEEDED",
-					"message":    "Too many requests. Please retry after the rate limit window.",
+					"code":        "RATE_LIMIT_EXCEEDED",
+					"message":     "Too many requests. Please retry after the rate limit window.",
 					"retry_after": resetAfter,
 					"request_id":  c.GetString("request_id"),
 				},

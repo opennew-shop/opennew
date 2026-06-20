@@ -80,22 +80,22 @@ func (r *SKURepository) DeductStockBatch(ctx context.Context, tx *sql.Tx, items 
 	//   WHERE sku_id IN ('sku_h100', 'sku_a100')
 	//     AND (sku_id = 'sku_h100' AND stock >= 2 OR sku_id = 'sku_a100' AND stock >= 1)
 	var (
-		caseBuilder   strings.Builder
-		whereBuilder  strings.Builder
-		skuIDs        = make([]string, len(items))
-		args          = make([]interface{}, 0, len(items)*2)
-		argIdx        = 1
+		caseBuilder  strings.Builder
+		whereBuilder strings.Builder
+		skuIDs       = make([]string, len(items))
+		args         = make([]interface{}, 0, len(items)*2)
+		argIdx       = 1
 	)
 
 	caseBuilder.WriteString("UPDATE catalog_skus SET stock = CASE sku_id ")
 	for i, item := range items {
-		skuIDs[i] = item.SkuID
+		skuIDs[i] = item.SKUID
 		caseBuilder.WriteString(fmt.Sprintf("WHEN $%d THEN stock - $%d ", argIdx, argIdx+1))
 		if i > 0 {
 			whereBuilder.WriteString(" OR ")
 		}
 		whereBuilder.WriteString(fmt.Sprintf("(sku_id = $%d AND stock >= $%d)", argIdx, argIdx+1))
-		args = append(args, item.SkuID, item.Qty)
+		args = append(args, item.SKUID, item.Qty)
 		argIdx += 2
 	}
 	caseBuilder.WriteString("END, updated_at = NOW()")
@@ -144,9 +144,9 @@ func (r *SKURepository) RestoreStockBatch(ctx context.Context, tx *sql.Tx, items
 
 	caseBuilder.WriteString("UPDATE catalog_skus SET stock = CASE sku_id ")
 	for i, item := range items {
-		skuIDs[i] = item.SkuID
+		skuIDs[i] = item.SKUID
 		caseBuilder.WriteString(fmt.Sprintf("WHEN $%d THEN stock + $%d ", argIdx, argIdx+1))
-		args = append(args, item.SkuID, item.Qty)
+		args = append(args, item.SKUID, item.Qty)
 		argIdx += 2
 	}
 	caseBuilder.WriteString("END, updated_at = NOW()")

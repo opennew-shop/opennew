@@ -31,7 +31,7 @@ func CORS() gin.HandlerFunc {
 		c.Header("Access-Control-Max-Age", "86400")
 
 		// Content-Security-Policy for local Agent renderer
-		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src http://127.0.0.1:* http://localhost:*; img-src 'self' https://cdn.yourshop.com data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'")
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src http://127.0.0.1:* http://localhost:*; img-src 'self' https://opennew.shop https://cdn.yourshop.com data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'")
 
 		// Handle preflight
 		if c.Request.Method == http.MethodOptions {

@@ -31,43 +31,43 @@ type LedgerEntry struct {
 // These map to the CHECK constraints on debit_account / credit_account columns.
 const (
 	// AccountUserAvailable 用户可用余额账户
-	AccountUserAvailable       = "user_available"
+	AccountUserAvailable = "user_available"
 	// AccountUserPending 用户挂起(冻结)账户,购买时由可用余额转入
-	AccountUserPending         = "user_pending"
+	AccountUserPending = "user_pending"
 	// AccountMerchantPending 商户挂起账户
-	AccountMerchantPending     = "merchant_pending"
+	AccountMerchantPending = "merchant_pending"
 	// AccountMerchantSettled 商户已结算账户
-	AccountMerchantSettled     = "merchant_settled"
+	AccountMerchantSettled = "merchant_settled"
 	// AccountPlatformFee 平台手续费账户
-	AccountPlatformFee         = "platform_fee"
+	AccountPlatformFee = "platform_fee"
 	// AccountReserveLiability 储备负债账户(平台对用户的负债)
-	AccountReserveLiability    = "reserve_liability"
+	AccountReserveLiability = "reserve_liability"
 	// AccountRedemptionPending 赎回挂起账户
-	AccountRedemptionPending   = "redemption_pending"
+	AccountRedemptionPending = "redemption_pending"
 	// AccountMintPending 铸币挂起账户
-	AccountMintPending         = "mint_pending"
+	AccountMintPending = "mint_pending"
 	// AccountReserveAsset 储备资产账户
-	AccountReserveAsset        = "reserve_asset"
+	AccountReserveAsset = "reserve_asset"
 )
 
 // Entry types used for transaction classification.
 const (
 	// EntryTypePurchaseHold 购买冻结:可用→挂起
-	EntryTypePurchaseHold    = "purchase_hold"
+	EntryTypePurchaseHold = "purchase_hold"
 	// EntryTypePurchaseSettle 购买结算:挂起→商户已结算
-	EntryTypePurchaseSettle  = "purchase_settle"
+	EntryTypePurchaseSettle = "purchase_settle"
 	// EntryTypePurchaseRefund 购买退款:挂起→可用
-	EntryTypePurchaseRefund  = "purchase_refund"
+	EntryTypePurchaseRefund = "purchase_refund"
 	// EntryTypeMintCredit 铸币入账:确认充值后为用户贷记 vUSDC
-	EntryTypeMintCredit      = "mint_credit"
+	EntryTypeMintCredit = "mint_credit"
 	// EntryTypeRedemptionDebit 赎回扣减:从用户可用余额扣除并锁定
-	EntryTypeRedemptionDebit  = "redemption_debit"
+	EntryTypeRedemptionDebit = "redemption_debit"
 	// EntryTypeRedemptionRelease 赎回释放:赎回失败时将锁定资金退回可用余额
 	EntryTypeRedemptionRelease = "redemption_release"
 	// EntryTypeFeeCollect 手续费收取
-	EntryTypeFeeCollect        = "fee_collect"
+	EntryTypeFeeCollect = "fee_collect"
 	// EntryTypeDepositConfirm 充值确认
-	EntryTypeDepositConfirm    = "deposit_confirm"
+	EntryTypeDepositConfirm = "deposit_confirm"
 )
 
 // LedgerTransaction represents a complete double-entry transaction consisting
@@ -83,35 +83,47 @@ type LedgerTransaction struct {
 // LedgerBalance represents a materialized or computed balance for a specific
 // account type and wallet.
 type LedgerBalance struct {
-	Wallet          string `json:"wallet"`
-	AccountType     string `json:"account_type"`
-	Currency        string `json:"currency"`
-	BalanceMinor    int64  `json:"balance_minor"`
-	LastEntryAt     time.Time `json:"last_entry_at,omitempty"`
+	Wallet       string    `json:"wallet"`
+	AccountType  string    `json:"account_type"`
+	Currency     string    `json:"currency"`
+	BalanceMinor int64     `json:"balance_minor"`
+	LastEntryAt  time.Time `json:"last_entry_at,omitempty"`
 }
 
 // WalletBalance represents an aggregate balance view for a wallet across all account types
 // within a single currency. It is derived from ledger_entries rather than stored directly.
 type WalletBalance struct {
-	Wallet       string `json:"wallet"`
-	Currency     string `json:"currency"`
-	Available    int64  `json:"available"`
-	Pending      int64  `json:"pending"`
-	TotalDebit   int64  `json:"total_debit"`
-	TotalCredit  int64  `json:"total_credit"`
+	Wallet      string `json:"wallet"`
+	Currency    string `json:"currency"`
+	Available   int64  `json:"available"`
+	Pending     int64  `json:"pending"`
+	TotalDebit  int64  `json:"total_debit"`
+	TotalCredit int64  `json:"total_credit"`
 }
 
 // ValidateBalance checks that total debits equal total credits in a list of entries.
 // This is a fundamental invariant of double-entry accounting.
 func ValidateBalance(entries []LedgerEntry) bool {
-	// H-03 FIX: previous impl added AmountMinor to both totals → always true.
-	// Aggregate per-account net positions; global sum must be zero.
+	if len(entries) == 0 {
+		return false
+	}
 	bal := map[string]int64{}
+	txID := entries[0].TransactionID
+	currency := entries[0].Currency
 	for _, e := range entries {
 		if e.AmountMinor <= 0 {
 			return false
 		}
 		if e.DebitAccount == "" || e.CreditAccount == "" {
+			return false
+		}
+		if e.DebitAccount == e.CreditAccount {
+			return false
+		}
+		if !ValidAccount(e.DebitAccount) || !ValidAccount(e.CreditAccount) {
+			return false
+		}
+		if e.TransactionID != txID || e.Currency != currency {
 			return false
 		}
 		bal[e.DebitAccount] -= e.AmountMinor
@@ -122,6 +134,23 @@ func ValidateBalance(entries []LedgerEntry) bool {
 		sum += v
 	}
 	return sum == 0
+}
+
+func ValidAccount(account string) bool {
+	switch account {
+	case AccountUserAvailable,
+		AccountUserPending,
+		AccountMerchantPending,
+		AccountMerchantSettled,
+		AccountPlatformFee,
+		AccountReserveLiability,
+		AccountRedemptionPending,
+		AccountMintPending,
+		AccountReserveAsset:
+		return true
+	default:
+		return false
+	}
 }
 
 // PurchaseHold creates ledger entries for placing a purchase hold:

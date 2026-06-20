@@ -37,26 +37,28 @@ function req(method, path, body, headers = {}) {
   const p = await req('POST', '/api/v1/cli/checkout/prepare', { quote_id: quoteId, wallet });
   const intentId = p.body.order_intent_id;
   const payload = p.body.signable_payload;
+  const runId = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+  const key = suffix => `ck_${runId}_${suffix}`;
 
   // Test 1: signature:none → 401
-  const r1 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: intentId, quote_id: quoteId, wallet, wallet_signature: 'none' }, { 'Idempotency-Key': 'ck_t1' });
+  const r1 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: intentId, quote_id: quoteId, wallet, wallet_signature: 'none' }, { 'Idempotency-Key': key('t1') });
   (r1.status === 401) ? ok("signature:'none' 被拒 (401) — 零成本下单已阻断") : no(`signature:none 返回 ${r1.status} (期望401)`);
 
   // Test 2: placeholder → 401
-  const r2 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: intentId, quote_id: quoteId, wallet, wallet_signature: 'demo_signature_placeholder' }, { 'Idempotency-Key': 'ck_t2' });
+  const r2 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: intentId, quote_id: quoteId, wallet, wallet_signature: 'demo_signature_placeholder' }, { 'Idempotency-Key': key('t2') });
   (r2.status === 401) ? ok('占位签名被拒 (401)') : no(`占位签名返回 ${r2.status}`);
 
   // Test 3: valid signature → 200
   const msg = Buffer.from('ANCF_CHECKOUT:' + JSON.stringify(payload), 'utf8');
   const sig = Buffer.from(nacl.sign.detached(new Uint8Array(msg), kp.secretKey)).toString('base64');
-  const r3 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: intentId, quote_id: quoteId, wallet, wallet_signature: sig }, { 'Idempotency-Key': 'ck_t3' });
+  const r3 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: intentId, quote_id: quoteId, wallet, wallet_signature: sig }, { 'Idempotency-Key': key('t3') });
   (r3.status === 200 && r3.body.status === 'committed') ? ok('有效 EdDSA 签名通过 (200 committed)') : no(`有效签名返回 ${r3.status}: ${JSON.stringify(r3.body).slice(0,80)}`);
 
   // Test 4: wallet binding — different wallet on a fresh intent
   const q4 = await req('POST', '/api/v1/cli/quote', { wallet, network: 'solana-mainnet', lines: [{ sku_id: 'sku_gpu_h100_v1', quantity: 1 }] });
   const p4 = await req('POST', '/api/v1/cli/checkout/prepare', { quote_id: q4.body.quote_id, wallet });
   const evilWallet = bs58.encode(Buffer.from(nacl.sign.keyPair().publicKey));
-  const r4 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: p4.body.order_intent_id, quote_id: q4.body.quote_id, wallet: evilWallet, wallet_signature: 'none' }, { 'Idempotency-Key': 'ck_t4' });
+  const r4 = await req('POST', '/api/v1/cli/checkout/commit', { order_intent_id: p4.body.order_intent_id, quote_id: q4.body.quote_id, wallet: evilWallet, wallet_signature: 'none' }, { 'Idempotency-Key': key('t4') });
   (r4.status === 403 || r4.status === 401) ? ok(`钱包不匹配被拒 (${r4.status}) — 冒名下单已阻断`) : no(`冒名钱包返回 ${r4.status}`);
 
   console.log(`\n=== ${pass} 通过 / ${fail} 失败 ===`);

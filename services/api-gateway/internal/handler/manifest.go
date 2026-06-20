@@ -118,7 +118,7 @@ func ServeManifest(cfg *config.Config) gin.HandlerFunc {
 				"allow_autonomous_checkout":  false,
 				"max_auto_total_minor":       "0",
 				"require_human_confirmation": true,
-				"allowed_component_hosts":    []string{"cdn.yourshop.com"},
+				"allowed_component_hosts":    []string{"opennew.shop", "cdn.yourshop.com"},
 			},
 			"payment_rails": []gin.H{
 				{

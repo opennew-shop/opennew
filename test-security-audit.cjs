@@ -3,10 +3,16 @@
  * Tests: API | Bridge | Ledger | Agent | Solana On-Chain
  */
 const http = require('http');
-const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const nacl = require('tweetnacl');
+const _bs58 = require('bs58');
+const bs58 = _bs58.default || _bs58;
 
-const API = 'http://127.0.0.1:8080';
-const AGENT = 'http://127.0.0.1:3001';
+const API = (process.env.ANCF_API_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '');
+const AGENT = (process.env.ANCF_AGENT_URL || 'http://127.0.0.1:3000').replace(/\/+$/, '');
+const SOLANA_RPC = process.env.ANCF_SOLANA_RPC || 'https://api.devnet.solana.com';
+const VUSDC_MINT = process.env.ANCF_VUSDC_MINT || 'Ecz3XMcs76JsFiiUgVNDGbqtKVotMP5gMMAjCJYpe8SX';
 
 let pass = 0, fail = 0, warn = 0;
 function ok(msg) { pass++; console.log('  ✅', msg); }
@@ -39,6 +45,8 @@ function fetchJSON(url, opts = {}) {
 console.log('╔══════════════════════════════════════════════╗');
 console.log('║  ANCF Security Boundary Audit                ║');
 console.log('╚══════════════════════════════════════════════╝\n');
+console.log(`API   = ${API}`);
+console.log(`Agent = ${AGENT}\n`);
 
 // ═══════════════════════════════════════════════
 console.log('1. API Gateway — 认证与限流');
@@ -123,7 +131,8 @@ console.log('\n3. 账本安全 — 完整性攻击');
 // ═══════════════════════════════════════════════
 console.log('\n4. Idempotency 攻击');
 // ═══════════════════════════════════════════════
-const W = '5d1tH6ryEi9hYmWc3idLsNTQ11n57tjYBuztqGZpAmEp';
+const testWallet = nacl.sign.keyPair();
+const W = bs58.encode(Buffer.from(testWallet.publicKey));
 const qr = await fetchJSON(API + '/api/v1/cli/quote', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: { wallet: W, network: 'solana-mainnet', lines: [{ sku_id: 'sku_gpu_h100_v1', quantity: 1 }] }
@@ -134,41 +143,40 @@ const pr = await fetchJSON(API + '/api/v1/cli/checkout/prepare', {
 });
 
 {
-  // Same key, different body
+  // Same key, different body. The first request must be a valid commit, otherwise
+  // signature verification would reject it before idempotency can be exercised.
   const key = 'ck_attack_' + Date.now();
+  const msg = Buffer.from('ANCF_CHECKOUT:' + JSON.stringify(pr.body.signable_payload), 'utf8');
+  const sig = Buffer.from(nacl.sign.detached(new Uint8Array(msg), testWallet.secretKey)).toString('base64');
   const r1 = await fetchJSON(API + '/api/v1/cli/checkout/commit', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
-    body: { order_intent_id: pr.body.order_intent_id, quote_id: qr.body.quote_id, wallet: W, wallet_signature: 'sig1', agent_session_id: 'sec_test' }
+    body: { order_intent_id: pr.body.order_intent_id, quote_id: qr.body.quote_id, wallet: W, wallet_signature: sig, agent_session_id: 'sec_test' }
   });
   const r2 = await fetchJSON(API + '/api/v1/cli/checkout/commit', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
     body: { order_intent_id: pr.body.order_intent_id, quote_id: qr.body.quote_id, wallet: W, wallet_signature: 'DIFFERENT_SIG_ATTACK', agent_session_id: 'sec_test' }
   });
-  r2.status === 409 ? ok('Idempotency: different body same key → 409') : no(`Idempotency conflict bypass: ${r2.status}`);
+  (r1.status === 200 && r2.status === 409) ? ok('Idempotency: different body same key → 409') : no(`Idempotency conflict test failed: first=${r1.status}, second=${r2.status}`);
 }
 
 // ═══════════════════════════════════════════════
 console.log('\n5. Solana Mint Authority — 未授权铸币测试');
 // ═══════════════════════════════════════════════
 {
-  const { Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction } = require('d:/开发者测试/sol web demo/node_modules/@solana/web3.js');
-  const { TOKEN_2022_PROGRAM_ID, createMintToInstruction, getOrCreateAssociatedTokenAccount } = require('d:/开发者测试/sol web demo/node_modules/@solana/spl-token');
-  const fs = require('fs');
-  const path = require('path');
-
-  const RPC = 'https://api.devnet.solana.com';
-  const MINT = 'Ecz3XMcs76JsFiiUgVNDGbqtKVotMP5gMMAjCJYpe8SX';
   const payerFile = path.join(__dirname, 'onchain', 'vusdc-mint', 'payer.json');
 
   if (fs.existsSync(payerFile)) {
-    const c = new Connection(RPC, 'confirmed');
+    const { Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction } = require('@solana/web3.js');
+    const { TOKEN_2022_PROGRAM_ID, createMintToInstruction, getOrCreateAssociatedTokenAccount } = require('@solana/spl-token');
+
+    const c = new Connection(SOLANA_RPC, 'confirmed');
     const payer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(payerFile, 'utf-8'))));
 
     // Test: try mint with payer (NOT the mint authority — authority is multisig-auth)
     try {
       const tmpWallet = Keypair.generate();
-      const ata = await getOrCreateAssociatedTokenAccount(c, payer, new PublicKey(MINT), tmpWallet.publicKey, false, 'confirmed', { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
-      const tx = new Transaction().add(createMintToInstruction(new PublicKey(MINT), ata.address, payer.publicKey, 1_000_000n, [], TOKEN_2022_PROGRAM_ID));
+      const ata = await getOrCreateAssociatedTokenAccount(c, payer, new PublicKey(VUSDC_MINT), tmpWallet.publicKey, false, 'confirmed', { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
+      const tx = new Transaction().add(createMintToInstruction(new PublicKey(VUSDC_MINT), ata.address, payer.publicKey, 1_000_000n, [], TOKEN_2022_PROGRAM_ID));
       await sendAndConfirmTransaction(c, tx, [payer], { skipPreflight: true });
       no('ON-CHAIN: payer minted without authority'); // Should NOT succeed
     } catch (e) {
@@ -186,8 +194,8 @@ console.log('\n5. Solana Mint Authority — 未授权铸币测试');
       const mintAuth = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(authFile, 'utf-8'))));
       try {
         const tmpWallet = Keypair.generate();
-        const ata = await getOrCreateAssociatedTokenAccount(c, payer, new PublicKey(MINT), tmpWallet.publicKey, false, 'confirmed', { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
-        const tx = new Transaction().add(createMintToInstruction(new PublicKey(MINT), ata.address, mintAuth.publicKey, 10_000n, [], TOKEN_2022_PROGRAM_ID));
+        const ata = await getOrCreateAssociatedTokenAccount(c, payer, new PublicKey(VUSDC_MINT), tmpWallet.publicKey, false, 'confirmed', { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
+        const tx = new Transaction().add(createMintToInstruction(new PublicKey(VUSDC_MINT), ata.address, mintAuth.publicKey, 10_000n, [], TOKEN_2022_PROGRAM_ID));
         const sig = await sendAndConfirmTransaction(c, tx, [payer, mintAuth]);
         ok(`ON-CHAIN: mint authority can mint (10 vUSDC→test wallet, tx=${sig.slice(0, 12)}...)`);
       } catch (e) {
@@ -198,7 +206,7 @@ console.log('\n5. Solana Mint Authority — 未授权铸币测试');
     }
 
     // Freeze authority check
-    const mintInfo = await c.getAccountInfo(new PublicKey(MINT));
+    const mintInfo = await c.getAccountInfo(new PublicKey(VUSDC_MINT));
     if (mintInfo) {
       // Token-2022 mint: byte 36-40 contains freeze_authority COption
       const hasFreeze = mintInfo.data[36] === 1;

@@ -31,15 +31,15 @@ func ValidNetwork(n string) bool {
 // ChainTx represents a single on-chain transaction tracked by the platform.
 // Maps to the chain_txs table in the database.
 type ChainTx struct {
-	ID            int64            `json:"id" db:"id"`
-	Network       string           `json:"network" db:"network"`
-	TxHash        string           `json:"tx_hash" db:"tx_hash"`
-	TxType        string           `json:"tx_type" db:"tx_type"` // deposit, mint, burn, payout
-	Status        string           `json:"status" db:"status"`   // submitted, confirmed, finalized, failed
-	Confirmations int              `json:"confirmations" db:"confirmations"`
-	RawJSON       json.RawMessage  `json:"raw_json" db:"raw_json"`
-	CreatedAt     time.Time        `json:"created_at" db:"created_at"`
-	FinalizedAt   *time.Time       `json:"finalized_at,omitempty" db:"finalized_at"`
+	ID            int64           `json:"id" db:"id"`
+	Network       string          `json:"network" db:"network"`
+	TxHash        string          `json:"tx_hash" db:"tx_hash"`
+	TxType        string          `json:"tx_type" db:"tx_type"` // deposit, mint, burn, payout
+	Status        string          `json:"status" db:"status"`   // submitted, confirmed, finalized, failed
+	Confirmations int             `json:"confirmations" db:"confirmations"`
+	RawJSON       json.RawMessage `json:"raw_json" db:"raw_json"`
+	CreatedAt     time.Time       `json:"created_at" db:"created_at"`
+	FinalizedAt   *time.Time      `json:"finalized_at,omitempty" db:"finalized_at"`
 }
 
 // Chain transaction types.
@@ -53,10 +53,10 @@ const (
 
 // Chain transaction statuses.
 const (
-	TxStatusSubmitted  = "submitted"
-	TxStatusConfirmed  = "confirmed"
-	TxStatusFinalized  = "finalized"
-	TxStatusFailed     = "failed"
+	TxStatusSubmitted = "submitted"
+	TxStatusConfirmed = "confirmed"
+	TxStatusFinalized = "finalized"
+	TxStatusFailed    = "failed"
 )
 
 // DepositEvent represents a deposit parsed from on-chain data.
@@ -69,8 +69,10 @@ type DepositEvent struct {
 	ToAddress       string    `json:"to_address"` // reserve_address
 	AmountMinor     int64     `json:"amount_minor"`
 	AssetSymbol     string    `json:"asset_symbol"` // e.g. "USDC"
+	MintAddress     string    `json:"mint_address"`
 	DepositIntentID string    `json:"deposit_intent_id,omitempty"`
 	BlockNumber     int64     `json:"block_number"`
+	Confirmations   int       `json:"confirmations"`
 	Timestamp       time.Time `json:"timestamp"`
 }
 

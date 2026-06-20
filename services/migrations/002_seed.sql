@@ -39,8 +39,8 @@ INSERT INTO catalog_skus (
         "Interconnect": "NVLink 900GB/s"
     }'::jsonb,
     '{
-        "thumbnail": "https://cdn.yourshop.com/images/h100.png",
-        "banner": "https://cdn.yourshop.com/images/h100-banner.png",
+        "thumbnail": "https://opennew.shop/assets/products/h100.svg",
+        "banner": "https://opennew.shop/assets/products/h100.svg",
         "datasheet": "https://cdn.yourshop.com/docs/h100-datasheet.pdf"
     }'::jsonb,
     'active'
@@ -71,8 +71,8 @@ INSERT INTO catalog_skus (
         "Interconnect": "NVLink 600GB/s"
     }'::jsonb,
     '{
-        "thumbnail": "https://cdn.yourshop.com/images/a100.png",
-        "banner": "https://cdn.yourshop.com/images/a100-banner.png",
+        "thumbnail": "https://opennew.shop/assets/products/a100.svg",
+        "banner": "https://opennew.shop/assets/products/a100.svg",
         "datasheet": "https://cdn.yourshop.com/docs/a100-datasheet.pdf"
     }'::jsonb,
     'active'
@@ -103,8 +103,8 @@ INSERT INTO catalog_skus (
         "Tensor_Cores": "4th gen"
     }'::jsonb,
     '{
-        "thumbnail": "https://cdn.yourshop.com/images/l40s.png",
-        "banner": "https://cdn.yourshop.com/images/l40s-banner.png",
+        "thumbnail": "https://opennew.shop/assets/products/l40s.svg",
+        "banner": "https://opennew.shop/assets/products/l40s.svg",
         "datasheet": "https://cdn.yourshop.com/docs/l40s-datasheet.pdf"
     }'::jsonb,
     'active'

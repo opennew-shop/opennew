@@ -82,14 +82,14 @@ LIMIT $2 OFFSET $3`
 // GetBySKUID retrieves a single SKU by its sku_id.
 // Returns nil, nil when no matching active SKU is found.
 func (r *SKURepository) GetBySKUID(ctx context.Context, skuID string) (*model.SKU, error) {
-	sql := `SELECT
+	sqlStmt := `SELECT
     sku_id, title, description, currency, price_amount_minor, price_scale,
     stock, stock_hint, specs, media, status, created_at, updated_at
 FROM catalog_skus
 WHERE sku_id = $1 AND status = 'active'`
 
 	var sku model.SKU
-	err := r.db.QueryRowContext(ctx, sql, skuID).Scan(
+	err := r.db.QueryRowContext(ctx, sqlStmt, skuID).Scan(
 		&sku.SkuID, &sku.Title, &sku.Description, &sku.Currency,
 		&sku.PriceAmountMinor, &sku.PriceScale,
 		&sku.Stock, &sku.StockHint, &sku.Specs, &sku.Media,

@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 
-	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/internal/repository"
+	catalogRepo "github.com/ancf-commerce/ancf/services/catalog/repository"
 	"github.com/ancf-commerce/ancf/services/quote/internal/handler"
 	"github.com/ancf-commerce/ancf/services/quote/internal/repository"
 	"github.com/ancf-commerce/ancf/services/quote/internal/service"

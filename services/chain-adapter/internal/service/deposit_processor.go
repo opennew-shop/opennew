@@ -24,8 +24,10 @@ type DepositPayload struct {
 	ToAddress       string `json:"to_address"`
 	AmountMinor     int64  `json:"amount_minor"`
 	AssetSymbol     string `json:"asset_symbol"`
+	MintAddress     string `json:"mint_address"`
 	DepositIntentID string `json:"deposit_intent_id,omitempty"`
 	BlockNumber     int64  `json:"block_number"`
+	Confirmations   int    `json:"confirmations"`
 }
 
 // ConfirmDepositRequest is the HTTP request body for MintService's deposit confirm endpoint.
